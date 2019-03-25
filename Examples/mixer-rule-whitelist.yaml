@@ -1,0 +1,30 @@
+# Configuration for list adapter that lists versions v1 and v3
+apiVersion: config.istio.io/v1alpha2
+kind: listchecker
+metadata:
+  name: whitelist
+spec:
+  # providerUrl: ordinarily black and white lists are maintained
+  # externally and fetched asynchronously using the providerUrl.
+  overrides: ["v1", "v3"]  # overrides provide a static list
+  blacklist: false
+---
+# extract the version level by creating an instance of list entry template
+apiVersion: config.istio.io/v1alpha2
+kind: listentry
+metadata:
+  name: appversion
+spec:
+  value: source.labels["version"]
+---
+# enables whitelist checking for the rating service
+apiVersion: config.istio.io/v1alpha2
+kind: rule
+metadata:
+  name: checkversion
+spec:
+  match: destination.labels["app"] == "ratings"
+  actions:
+  - handler: whitelist.listchecker
+    instances:
+    - appversion.listentry
