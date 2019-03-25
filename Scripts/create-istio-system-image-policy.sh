@@ -10,4 +10,8 @@ spec:
    policy:
     va:
      enabled: false
+ - name: quay.io/*
+   policy:
+    va:
+     enabled: false
 EOF

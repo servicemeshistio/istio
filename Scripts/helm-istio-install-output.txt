@@ -1,0 +1,270 @@
+# helm install ./istio -f istio/values-istio-demo.yaml --name istio --namespace istio-system --tls
+NAME:   istio
+E0324 22:09:56.005440   16592 portforward.go:303] error copying from remote stream to local connection: readfrom tcp4 127.0.0.1:36963->127.0.0.1:50432: write tcp4 127.0.0.1:36963->127.0.0.1:50432: write: broken pipe
+LAST DEPLOYED: Sun Mar 24 22:09:27 2019
+NAMESPACE: istio-system
+STATUS: DEPLOYED
+
+RESOURCES:
+==> v1/Secret
+NAME   TYPE    DATA  AGE
+kiali  Opaque  2     28s
+
+==> v1/ConfigMap
+NAME                                                                DATA  AGE
+istio-galley-configuration                                          1     28s
+istio-grafana-custom-resources                                      2     28s
+istio-grafana-configuration-dashboards-pilot-dashboard              1     28s
+istio-grafana-configuration-dashboards-istio-workload-dashboard     1     28s
+istio-grafana-configuration-dashboards-istio-performance-dashboard  1     28s
+istio-grafana-configuration-dashboards-istio-mesh-dashboard         1     28s
+istio-grafana-configuration-dashboards-galley-dashboard             1     28s
+istio-grafana-configuration-dashboards-istio-service-dashboard      1     28s
+istio-grafana-configuration-dashboards-mixer-dashboard              1     28s
+istio-grafana                                                       2     28s
+kiali                                                               1     28s
+prometheus                                                          1     28s
+istio-security-custom-resources                                     2     28s
+istio                                                               2     28s
+istio-sidecar-injector                                              1     28s
+
+==> v1/Role
+NAME                      AGE
+istio-ingressgateway-sds  28s
+
+==> v1beta1/Deployment
+NAME                    DESIRED  CURRENT  UP-TO-DATE  AVAILABLE  AGE
+istio-galley            1        1        1           0          28s
+istio-ingressgateway    1        1        1           0          27s
+istio-egressgateway     1        1        1           0          27s
+grafana                 1        1        1           1          27s
+kiali                   1        1        1           1          26s
+istio-policy            1        1        1           1          25s
+istio-telemetry         1        1        1           1          23s
+istio-pilot             1        1        1           0          22s
+prometheus              1        1        1           0          20s
+istio-citadel           1        1        1           1          20s
+istio-sidecar-injector  1        1        1           0          19s
+istio-tracing           1        1        1           1          18s
+
+==> v1alpha3/DestinationRule
+NAME             AGE
+istio-policy     18s
+istio-telemetry  17s
+
+==> v2beta1/HorizontalPodAutoscaler
+NAME                  REFERENCE                        TARGETS        MINPODS  MAXPODS  REPLICAS  AGE
+istio-egressgateway   Deployment/istio-egressgateway   <unknown>/80%  1        5        1         17s
+istio-ingressgateway  Deployment/istio-ingressgateway  <unknown>/80%  1        5        1         17s
+istio-telemetry       Deployment/istio-telemetry       <unknown>/80%  1        5        1         17s
+istio-policy          Deployment/istio-policy          <unknown>/80%  1        5        1         17s
+istio-pilot           Deployment/istio-pilot           <unknown>/80%  1        5        1         17s
+
+==> v1beta1/ClusterRoleBinding
+NAME                                                   AGE
+istio-security-post-install-role-binding-istio-system  28s
+
+==> v1/RoleBinding
+NAME                      AGE
+istio-ingressgateway-sds  28s
+
+==> v1alpha2/attributemanifest
+NAME        AGE
+kubernetes  17s
+istioproxy  17s
+
+==> v1/Pod(related)
+NAME                                     READY  STATUS             RESTARTS  AGE
+istio-galley-7bccb97448-dq7gq            0/1    ContainerCreating  0         27s
+istio-ingressgateway-679bd59c6-n4jvh     0/1    Running            0         27s
+istio-egressgateway-6dfb8dd765-gtc2q     0/1    Running            0         27s
+grafana-5c45779547-tc6xf                 1/1    Running            0         26s
+kiali-56d95cf466-c7vnt                   1/1    Running            0         25s
+istio-policy-69cfdbb8d5-tkp6j            2/2    Running            0         24s
+istio-telemetry-557746cf59-zkjp7         2/2    Running            1         22s
+istio-pilot-77465b8f75-n8lvh             1/2    Running            0         21s
+prometheus-8647cf4bc7-nnm7f              0/1    Init:0/1           0         20s
+istio-citadel-79cb95445b-lmjw6           1/1    Running            0         19s
+istio-sidecar-injector-646d77f96c-fmm7g  0/1    ContainerCreating  0         18s
+istio-tracing-5fbc94c494-d648h           1/1    Running            0         17s
+
+==> v1/ClusterRole
+NAME                                     AGE
+istio-galley-istio-system                28s
+istio-egressgateway-istio-system         28s
+istio-ingressgateway-istio-system        28s
+istio-grafana-post-install-istio-system  28s
+kiali                                    28s
+istio-mixer-istio-system                 28s
+istio-pilot-istio-system                 28s
+prometheus-istio-system                  28s
+istio-citadel-istio-system               28s
+istio-sidecar-injector-istio-system      28s
+istio-reader                             28s
+
+==> v1beta1/ClusterRole
+istio-security-post-install-istio-system  28s
+
+==> v1/ClusterRoleBinding
+NAME                                                    AGE
+istio-galley-admin-role-binding-istio-system            28s
+istio-egressgateway-istio-system                        28s
+istio-ingressgateway-istio-system                       28s
+istio-grafana-post-install-role-binding-istio-system    28s
+istio-kiali-admin-role-binding-istio-system             28s
+istio-mixer-admin-role-binding-istio-system             28s
+istio-pilot-istio-system                                28s
+prometheus-istio-system                                 28s
+istio-citadel-istio-system                              28s
+istio-sidecar-injector-admin-role-binding-istio-system  28s
+istio-multi                                             28s
+
+==> v1beta1/MutatingWebhookConfiguration
+NAME                    AGE
+istio-sidecar-injector  17s
+
+==> v1alpha2/metric
+tcpconnectionsclosed  17s
+requestsize           17s
+requestduration       17s
+tcpbytereceived       17s
+requestcount          17s
+responsesize          17s
+tcpconnectionsopened  17s
+tcpbytesent           17s
+
+==> v1alpha2/rule
+kubeattrgenrulerule      17s
+promhttp                 17s
+promtcpconnectionclosed  17s
+promtcp                  17s
+stdiotcp                 17s
+tcpkubeattrgenrulerule   17s
+stdio                    17s
+promtcpconnectionopen    17s
+
+==> v1/ServiceAccount
+NAME                                    SECRETS  AGE
+istio-galley-service-account            1        28s
+istio-ingressgateway-service-account    1        28s
+istio-egressgateway-service-account     1        28s
+istio-grafana-post-install-account      1        28s
+kiali-service-account                   1        28s
+istio-mixer-service-account             1        28s
+istio-pilot-service-account             1        28s
+prometheus                              1        28s
+istio-security-post-install-account     1        28s
+istio-citadel-service-account           1        28s
+istio-sidecar-injector-service-account  1        28s
+istio-multi                             1        28s
+
+==> v1/Service
+NAME                    TYPE          CLUSTER-IP  EXTERNAL-IP  PORT(S)                                                                                                                                     AGE
+istio-galley            ClusterIP     10.0.0.200  <none>       443/TCP,15014/TCP,9901/TCP                                                                                                                  28s
+istio-ingressgateway    LoadBalancer  10.0.0.71   <pending>    80:31380/TCP,443:31390/TCP,31400:31400/TCP,15029:32493/TCP,15030:32451/TCP,15031:30006/TCP,15032:32398/TCP,15443:30582/TCP,15020:30897/TCP  28s
+istio-egressgateway     ClusterIP     10.0.0.11   <none>       80/TCP,443/TCP,15443/TCP                                                                                                                    28s
+grafana                 ClusterIP     10.0.0.157  <none>       3000/TCP                                                                                                                                    28s
+kiali                   ClusterIP     10.0.0.170  <none>       20001/TCP                                                                                                                                   28s
+istio-policy            ClusterIP     10.0.0.137  <none>       9091/TCP,15004/TCP,15014/TCP                                                                                                                28s
+istio-telemetry         ClusterIP     10.0.0.235  <none>       9091/TCP,15004/TCP,15014/TCP,42422/TCP                                                                                                      28s
+istio-pilot             ClusterIP     10.0.0.222  <none>       15010/TCP,15011/TCP,8080/TCP,15014/TCP                                                                                                      28s
+prometheus              ClusterIP     10.0.0.46   <none>       9090/TCP                                                                                                                                    28s
+istio-citadel           ClusterIP     10.0.0.3    <none>       8060/TCP,15014/TCP                                                                                                                          28s
+istio-sidecar-injector  ClusterIP     10.0.0.66   <none>       443/TCP                                                                                                                                     28s
+jaeger-query            ClusterIP     10.0.0.63   <none>       16686/TCP                                                                                                                                   17s
+jaeger-collector        ClusterIP     10.0.0.47   <none>       14267/TCP,14268/TCP                                                                                                                         17s
+jaeger-agent            ClusterIP     None        <none>       5775/UDP,6831/UDP,6832/UDP                                                                                                                  17s
+zipkin                  ClusterIP     10.0.0.83   <none>       9411/TCP                                                                                                                                    17s
+tracing                 ClusterIP     10.0.0.85   <none>       80/TCP                                                                                                                                      17s
+
+==> v1beta1/PodDisruptionBudget
+NAME                  MIN AVAILABLE  MAX UNAVAILABLE  ALLOWED DISRUPTIONS  AGE
+istio-galley          1              N/A              0                    17s
+istio-ingressgateway  1              N/A              0                    17s
+istio-egressgateway   1              N/A              0                    17s
+istio-policy          1              N/A              0                    17s
+istio-telemetry       1              N/A              0                    17s
+istio-pilot           1              N/A              0                    17s
+
+==> v1alpha2/handler
+NAME           AGE
+stdio          17s
+prometheus     17s
+kubernetesenv  17s
+
+==> v1alpha2/kubernetes
+attributes  17s
+
+==> v1alpha2/logentry
+accesslog     17s
+tcpaccesslog  17s
+
+
+NOTES:
+Thank you for installing istio.
+
+Your release is named istio.
+
+To get started running application with Istio, execute the following steps:
+1. Label namespace that application object will be deployed to by the following command (take default namespace as an example)
+
+$ kubectl label namespace default istio-injection=enabled
+$ kubectl get namespace -L istio-injection
+
+2. Deploy your applications
+
+$ kubectl apply -f <your-application>.yaml
+
+For more information on running Istio, visit:
+https://istio.io/
+[root@osc01 helm]# kubectl -n istio-system get pods
+NAME                                      READY   STATUS    RESTARTS   AGE
+grafana-5c45779547-tc6xf                  1/1     Running   0          72s
+istio-citadel-79cb95445b-lmjw6            1/1     Running   0          65s
+istio-egressgateway-6dfb8dd765-gtc2q      1/1     Running   0          73s
+istio-galley-7bccb97448-dq7gq             1/1     Running   0          73s
+istio-ingressgateway-679bd59c6-n4jvh      1/1     Running   0          73s
+istio-pilot-77465b8f75-n8lvh              2/2     Running   0          67s
+istio-policy-69cfdbb8d5-tkp6j             2/2     Running   2          70s
+istio-sidecar-injector-646d77f96c-fmm7g   1/1     Running   0          64s
+istio-telemetry-557746cf59-zkjp7          2/2     Running   3          68s
+istio-tracing-5fbc94c494-d648h            1/1     Running   0          63s
+kiali-56d95cf466-c7vnt                    1/1     Running   0          71s
+prometheus-8647cf4bc7-nnm7f               1/1     Running   0          66s
+[root@osc01 helm]# kubectl -n istio-system get svc
+NAME                     TYPE           CLUSTER-IP   EXTERNAL-IP   PORT(S)                                                                                                                                      AGE
+grafana                  ClusterIP      10.0.0.157   <none>        3000/TCP                                                                                                                                     92s
+istio-citadel            ClusterIP      10.0.0.3     <none>        8060/TCP,15014/TCP                                                                                                                           92s
+istio-egressgateway      ClusterIP      10.0.0.11    <none>        80/TCP,443/TCP,15443/TCP                                                                                                                     92s
+istio-galley             ClusterIP      10.0.0.200   <none>        443/TCP,15014/TCP,9901/TCP                                                                                                                   92s
+istio-ingressgateway     LoadBalancer   10.0.0.71    <pending>     80:31380/TCP,443:31390/TCP,31400:31400/TCP,15029:32493/TCP,15030:32451/TCP,15031:30006/TCP,15032:32398/TCP,15443:30582/TCP,15020:30897/TCP   92s
+istio-pilot              ClusterIP      10.0.0.222   <none>        15010/TCP,15011/TCP,8080/TCP,15014/TCP                                                                                                       92s
+istio-policy             ClusterIP      10.0.0.137   <none>        9091/TCP,15004/TCP,15014/TCP                                                                                                                 92s
+istio-sidecar-injector   ClusterIP      10.0.0.66    <none>        443/TCP                                                                                                                                      92s
+istio-telemetry          ClusterIP      10.0.0.235   <none>        9091/TCP,15004/TCP,15014/TCP,42422/TCP                                                                                                       92s
+jaeger-agent             ClusterIP      None         <none>        5775/UDP,6831/UDP,6832/UDP                                                                                                                   81s
+jaeger-collector         ClusterIP      10.0.0.47    <none>        14267/TCP,14268/TCP                                                                                                                          81s
+jaeger-query             ClusterIP      10.0.0.63    <none>        16686/TCP                                                                                                                                    81s
+kiali                    ClusterIP      10.0.0.170   <none>        20001/TCP                                                                                                                                    92s
+prometheus               ClusterIP      10.0.0.46    <none>        9090/TCP                                                                                                                                     92s
+tracing                  ClusterIP      10.0.0.85    <none>        80/TCP                                                                                                                                       81s
+zipkin                   ClusterIP      10.0.0.83    <none>        9411/TCP                                                                                                                                     81s
+[root@osc01 helm]# 
+[root@osc01 helm]# kubectl -n istio-system get svc
+NAME                     TYPE           CLUSTER-IP   EXTERNAL-IP   PORT(S)                                                                                                                                      AGE
+grafana                  ClusterIP      10.0.0.157   <none>        3000/TCP                                                                                                                                     7m53s
+istio-citadel            ClusterIP      10.0.0.3     <none>        8060/TCP,15014/TCP                                                                                                                           7m53s
+istio-egressgateway      ClusterIP      10.0.0.11    <none>        80/TCP,443/TCP,15443/TCP                                                                                                                     7m53s
+istio-galley             ClusterIP      10.0.0.200   <none>        443/TCP,15014/TCP,9901/TCP                                                                                                                   7m53s
+istio-ingressgateway     LoadBalancer   10.0.0.71    <pending>     80:31380/TCP,443:31390/TCP,31400:31400/TCP,15029:32493/TCP,15030:32451/TCP,15031:30006/TCP,15032:32398/TCP,15443:30582/TCP,15020:30897/TCP   7m53s
+istio-pilot              ClusterIP      10.0.0.222   <none>        15010/TCP,15011/TCP,8080/TCP,15014/TCP                                                                                                       7m53s
+istio-policy             ClusterIP      10.0.0.137   <none>        9091/TCP,15004/TCP,15014/TCP                                                                                                                 7m53s
+istio-sidecar-injector   ClusterIP      10.0.0.66    <none>        443/TCP                                                                                                                                      7m53s
+istio-telemetry          ClusterIP      10.0.0.235   <none>        9091/TCP,15004/TCP,15014/TCP,42422/TCP                                                                                                       7m53s
+jaeger-agent             ClusterIP      None         <none>        5775/UDP,6831/UDP,6832/UDP                                                                                                                   7m42s
+jaeger-collector         ClusterIP      10.0.0.47    <none>        14267/TCP,14268/TCP                                                                                                                          7m42s
+jaeger-query             ClusterIP      10.0.0.63    <none>        16686/TCP                                                                                                                                    7m42s
+kiali                    ClusterIP      10.0.0.170   <none>        20001/TCP                                                                                                                                    7m53s
+prometheus               ClusterIP      10.0.0.46    <none>        9090/TCP                                                                                                                                     7m53s
+tracing                  ClusterIP      10.0.0.85    <none>        80/TCP                                                                                                                                       7m42s
+zipkin                   ClusterIP      10.0.0.83    <none>        9411/TCP                                                                                                                                     7m42s
