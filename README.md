@@ -194,7 +194,7 @@ ip_vs                 145497  0
 
 Add the module to `/etc/modules-load.d/ipvs.conf` to load the module in case of a reboot.
 
-```
+```console
 echo "ip_vs" > /etc/modules-load.d/ipvs.conf
 ```
 
@@ -211,7 +211,7 @@ helm install . --name keepalived --namespace istio-system \
 
 #### Check load balancer
 
-```
+```console
 # kubectl -n istio-system get svc
 Name                     TYPE           CLUSTER-IP   EXTERNAL-IP       PORT(S)                                                                                                                                      AGE
 grafana                  ClusterIP      10.0.0.65    <none>            3000/TCP                                                                                                                                     86m
@@ -243,13 +243,13 @@ How to enable Istio for new application application.
 
 Let's delete the earlier `istio-lab` name space. 
 
-```
+```console
 kubectl delete ns istio-lab
 ```
 
 Create name space and label for the web hooks to create proxy sidecar
 
-```
+```console
 kubectl create ns istio-lab
 
 kubectl label namespace istio-lab istio-injection=enabled
@@ -257,7 +257,7 @@ kubectl label namespace istio-lab istio-injection=enabled
 
 Deploy application
 
-```
+```console
 kubectl -n istio-lab apply -f bookinfo.yaml 
 
 service/details created
@@ -275,7 +275,7 @@ deployment.extensions/productpage-v1 created
 
 Check pods
 
-```
+```console
 # kubectl -n istio-lab get pods
 NAME                              READY   STATUS    RESTARTS   AGE
 details-v1-bc557b7fc-5vn22        2/2     Running   0          42s
@@ -294,7 +294,7 @@ Multiple cases:
 
   Find Pod's IP address for `productpage`  
 
-  ```
+  ```console
   # kubectl -n istio-lab get pods -o wide
   NAME                              READY   STATUS    RESTARTS   AGE   IP             NODE              NOMINATED NODE
   details-v1-bc557b7fc-99d4b        2/2     Running   0          21s   10.1.230.230   192.168.142.101   <none>
@@ -309,14 +309,14 @@ Multiple cases:
 
   Test the service:
 
-  ```
+  ```console
   curl -s http://10.1.230.246:9080 | grep title
   <title>Simple Bookstore App</title>
   ```
 
 * Run using internal service name's IP address - requires server access using local service name
 
-  ```
+  ```console
   # kubectl -n istio-lab get svc
   NAME          TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
   details       ClusterIP   10.0.0.181   <none>        9080/TCP   102s
@@ -328,7 +328,7 @@ Multiple cases:
 
   Test the service
 
-  ```
+  ```console
   # curl -s http://10.0.0.20:9080 | grep title
     <title>Simple Bookstore App</title>
   ```
@@ -337,7 +337,7 @@ Multiple cases:
 
   The connection between pod's IP address and service IP address is through the endpoints.
 
-  ```
+  ```console
   # kubectl -n istio-lab get ep
   NAME          ENDPOINTS                                               AGE
   details       10.1.230.230:9080                                       2m48s
@@ -351,7 +351,7 @@ Multiple cases:
 
   Check the IP address of the internal service name.
 
-  ```
+  ```console
   # dig +short productpage.istio-lab.svc.cluster.local @10.0.0.10
   10.0.0.20
   ```
@@ -364,7 +364,7 @@ Multiple cases:
 
   You can also view the service web page from outside VM but within the firewall of an enterprise by using the server's IP address. This would require changing the service from `ClusterIP` to the `NodePort`.
 
-  ```
+  ```console
   kubectl -n istio-lab edit svc productpage
   ```
 
@@ -372,7 +372,7 @@ Multiple cases:
 
   From:
 
-  ```
+  ```console
     selector:
     app: productpage
   sessionAffinity: None
@@ -381,7 +381,7 @@ Multiple cases:
   ```
 
   To:
-  ```
+  ```console
     selector:
     app: productpage
   sessionAffinity: None
@@ -390,7 +390,7 @@ Multiple cases:
 
   And save the file and again check the services.
 
-  ```
+  ```console
   # kubectl -n istio-lab get svc
   NAME          TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)          AGE
   details       ClusterIP   10.0.0.181   <none>        9080/TCP         10m
@@ -405,7 +405,7 @@ Multiple cases:
 
   Find out the IP address of the VM or master node of the ICP (or Kubernetes) cluster.
 
-  ```
+  ```console
   # kubectl get nodes
   NAME              STATUS   ROLES                                 AGE   VERSION
   192.168.142.101   Ready    etcd,management,master,proxy,worker   29d   v1.12.4+icp
@@ -423,7 +423,7 @@ Multiple cases:
 
   In our case, find out the external IP address.
 
-  ```
+  ```console
   # kubectl -n istio-system get svc | grep ingressgateway
   istio-ingressgateway     LoadBalancer   10.0.0.223   192.168.142.250   80:31380/TCP,443:31390/TCP,31400:31400/TCP,15029:32030/TCP,15030:30237/TCP,15031:30824/TCP,15032:30965/TCP,15443:31507/TCP,15020:31796/TCP   172m
   ```
@@ -478,6 +478,8 @@ Multiple cases:
       - uri:
           exact: /productpage
       - uri:
+          prefix: /static      
+      - uri:
           exact: /login
       - uri:
           exact: /logout
@@ -493,9 +495,7 @@ Multiple cases:
 
   ### Create Gateway and Virtual Service
 
-
-
-  ```
+  ```console
   ./01-create-gateway-virtual-service
 
   gateway.networking.istio.io/bookinfo-gateway created
@@ -508,7 +508,7 @@ Multiple cases:
 
   Check Gateway and Virtual Service
 
-  ```
+  ```console
   # kubectl -n istio-lab get gateway
   NAME               AGE
   bookinfo-gateway   2m
@@ -524,4 +524,33 @@ Multiple cases:
 
   If the IP address is defined in the DNS server, the internal service can be accessed using a domain name. 
 
-## 
+## Destination rules
+
+What is a destination rule and how this is used for?
+
+## Ssubsets
+
+What is a subset and how can you use it for different purposes?
+
+## Virtual Service 
+
+What is a virtual service and what different things can be accomplished?
+
+## Traffic Management
+
+Traffic management is done through mixer. How to route requests dynamically to multiple versions of a microservice?
+
+Access /productpage and refresh it few times. The book review output contains star ratings and sometime it shows and and other times it does not. This is due to the fact that Istio routes requests to all available versions in a round robin fashion.
+
+Route all traffic (100%) to only one version of rating microservice.
+
+1. Make a request routing rule that all traffic is sent only to v1 of the microservice. Show and explain.
+
+2. Set a rule to route traffic to v2 of the rating service based upon a particular user identity
+
+3. Explain Istio L7 routing features
+
+4. Explain what traffic shifting - how to gradually migrate traffic from one version of a microservice to another. As an example : migrate from older version to a new version. Create sequence of rules that route a percentage of traffic to one service.
+
+
+
