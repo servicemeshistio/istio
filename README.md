@@ -192,6 +192,12 @@ Prot LocalAddress:Port Scheduler Flags
 ip_vs                 145497  0
 ```
 
+Add the module to `/etc/modules-load.d/ipvs.conf` to load the module in case of a reboot.
+
+```
+echo "ip_vs" > /etc/modules-load.d/ipvs.conf
+```
+
 ```console
 echo Use subnet mask 29 to reserve 6 hosts in 192.168.142.248/29 Class C network.
 echo keepalivedCloudProvider.serviceIPRange="192.168.142.248/29"
@@ -199,7 +205,7 @@ echo keepalivedCloudProvider.serviceIPRange="192.168.142.248/29"
 cd keepalived
 
 helm install . --name keepalived --namespace istio-system \
- --set keepalivedCloudProvider.serviceIPRange="192.168.142.248/29" --tls
+ --set keepalivedCloudProvider.serviceIPRange="192.168.142.201/32" --tls
 
 ```
 
@@ -244,6 +250,8 @@ kubectl delete ns istio-lab
 Create name space and label for the web hooks to create proxy sidecar
 
 ```
+kubectl create ns istio-lab
+
 kubectl label namespace istio-lab istio-injection=enabled
 ```
 
@@ -278,78 +286,240 @@ reviews-v2-65fbdc9f88-lttjs       2/2     Running   0          41s
 reviews-v3-bd8855bdd-85flj        2/2     Running   0          40s
 ```
 
-Create Istio Gateway and Virtual Service
+### Run application
 
+Multiple cases:
 
-```yaml
-cat ./01-create-gateway-virtual-service
+* Run using pod's internal IP address
 
-#!/bin/bash
+  Find Pod's IP address for `productpage`  
 
-ACTION=${1:-create}
+  ```
+  # kubectl -n istio-lab get pods -o wide
+  NAME                              READY   STATUS    RESTARTS   AGE   IP             NODE              NOMINATED NODE
+  details-v1-bc557b7fc-99d4b        2/2     Running   0          21s   10.1.230.230   192.168.142.101   <none>
+  productpage-v1-6597cb5df9-jqhcq   2/2     Running   0          18s   10.1.230.246   192.168.142.101   <none>
+  ratings-v1-5c46fc6f85-pvh9l       2/2     Running   0          21s   10.1.230.231   192.168.142.101   <none>
+  reviews-v1-69dcdb544-6dbpz        2/2     Running   0          21s   10.1.230.214   192.168.142.101   <none>
+  reviews-v2-65fbdc9f88-4bpl5       2/2     Running   0          20s   10.1.230.247   192.168.142.101   <none>
+  reviews-v3-bd8855bdd-zb5zk        2/2     Running   0          19s   10.1.230.201   192.168.142.101   <none>
+  ```
 
-cat << EOF | kubectl -n istio-lab $ACTION -f -
-# Configure the ingress
-apiVersion: networking.istio.io/v1alpha3
-kind: Gateway
-metadata:
-  name: bookinfo-gateway
-spec:
-  selector:
-    istio: ingressgateway # use istio default controller
-  servers:
-  - port:
-      number: 80
-      name: http
-      protocol: HTTP
+  In above case, it is `10.1.230.246`. This IP address will be different for you.
+
+  Test the service:
+
+  ```
+  curl -s http://10.1.230.246:9080 | grep title
+  <title>Simple Bookstore App</title>
+  ```
+
+* Run using internal service name's IP address - requires server access using local service name
+
+  ```
+  # kubectl -n istio-lab get svc
+  NAME          TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
+  details       ClusterIP   10.0.0.181   <none>        9080/TCP   102s
+  productpage   ClusterIP   10.0.0.20    <none>        9080/TCP   100s
+  ratings       ClusterIP   10.0.0.66    <none>        9080/TCP   102s
+  reviews       ClusterIP   10.0.0.45    <none>        9080/TCP   102s
+  ```
+  The productpage service address is `10.0.0.20`. This IP address will be different for you.
+
+  Test the service
+
+  ```
+  # curl -s http://10.0.0.20:9080 | grep title
+    <title>Simple Bookstore App</title>
+  ```
+
+  The service IP address does not change for the life time of service. However, the pod address may change depending upon the node on which it gets scheduled.
+
+  The connection between pod's IP address and service IP address is through the endpoints.
+
+  ```
+  # kubectl -n istio-lab get ep
+  NAME          ENDPOINTS                                               AGE
+  details       10.1.230.230:9080                                       2m48s
+  productpage   10.1.230.246:9080                                       2m46s
+  ratings       10.1.230.231:9080                                       2m48s
+  reviews       10.1.230.201:9080,10.1.230.214:9080,10.1.230.247:9080   2m48s
+  ```
+  Notice that the productpage service endpoint is `10.1.230.246` which is the pod's IP address.
+
+  The service name can also be used provided Kubernetes internal DNS server is on the search list.
+
+  Check the IP address of the internal service name.
+
+  ```
+  # dig +short productpage.istio-lab.svc.cluster.local @10.0.0.10
+  10.0.0.20
+  ```
+
+  This IP address `10.0.0.20` is the IP address of the FQDN of the service name.
+
+  Open a browser from inside the VM and try `http://10.0.0.20:9080/` and `http://10.0.0.20:9080/` and you should be able to see the product page.
+
+* Run using a node port - requires server IP address - Run from outside the cluster but requires IP address for the cluster
+
+  You can also view the service web page from outside VM but within the firewall of an enterprise by using the server's IP address. This would require changing the service from `ClusterIP` to the `NodePort`.
+
+  ```
+  kubectl -n istio-lab edit svc productpage
+  ```
+
+  And change the type from `ClusterIP` to `NodePort` 
+
+  From:
+
+  ```
+    selector:
+    app: productpage
+  sessionAffinity: None
+  type: ClusterIP
+
+  ```
+
+  To:
+  ```
+    selector:
+    app: productpage
+  sessionAffinity: None
+  type: NodePort
+  ```
+
+  And save the file and again check the services.
+
+  ```
+  # kubectl -n istio-lab get svc
+  NAME          TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)          AGE
+  details       ClusterIP   10.0.0.181   <none>        9080/TCP         10m
+  productpage   NodePort    10.0.0.20    <none>        9080:30306/TCP   10m
+  ratings       ClusterIP   10.0.0.66    <none>        9080/TCP         10m
+  reviews       ClusterIP   10.0.0.45    <none>        9080/TCP         10m
+  ```
+
+  Notice the `NodePort` for the`productpage` service is `30306`. This port number will be different in your case.
+
+  Now, you can open a browser from outside the VM (or cluster in reality) and access the `productpage`. 
+
+  Find out the IP address of the VM or master node of the ICP (or Kubernetes) cluster.
+
+  ```
+  # kubectl get nodes
+  NAME              STATUS   ROLES                                 AGE   VERSION
+  192.168.142.101   Ready    etcd,management,master,proxy,worker   29d   v1.12.4+icp
+  ```
+
+  The IP address of the node is `192.168.142.101` and the node port is `30306`.
+
+  If you open the browser to http://192.168.142.101:30306 from outside the VM, you should be able to access the service.
+
+* Run using a load balancer IP address from outside the cluster
+
+  It may so happen that the ICP or Kubernetes cluster is behind the firewall and not accessible to the outside world. In that case, we may have an external load balancer that we can use to route the traffic from internal service to the outside.
+
+  We are simulating an external load balancer using `keepalived` but using IP address on the same subnet range of the VM. In reality, you will get an external IP addresses against the `istio-ingress-gatewaey` if an external load balancer is configured.
+
+  In our case, find out the external IP address.
+
+  ```
+  # kubectl -n istio-system get svc | grep ingressgateway
+  istio-ingressgateway     LoadBalancer   10.0.0.223   192.168.142.250   80:31380/TCP,443:31390/TCP,31400:31400/TCP,15029:32030/TCP,15030:30237/TCP,15031:30824/TCP,15032:30965/TCP,15443:31507/TCP,15020:31796/TCP   172m
+  ```
+
+  Notice that the external IP address assigned to `istio-ingressgateway` is `192.168.142.250`. We can access the service web page by using `http://192.168.142.250`.
+
+  Try accessing the web page and you will notice that the page did not work.
+
+  Now, we now to create a gateway and virtual services so that the request can be routed properly when it comes to the 
+
+  Create Istio Gateway and Virtual Service `istio-ingressgateway`
+
+  ### Istio Gateway and Virtual Service Definition
+
+  Script `01-create-gateway-virtual-service` has definition for a gateway and virtual service.
+
+  ```yaml
+  cat ./01-create-gateway-virtual-service
+
+  #!/bin/bash
+
+  ACTION=${1:-create}
+
+  cat << EOF | kubectl -n istio-lab $ACTION -f -
+  # Configure the ingress
+  apiVersion: networking.istio.io/v1alpha3
+  kind: Gateway
+  metadata:
+    name: bookinfo-gateway
+  spec:
+    selector:
+      istio: ingressgateway # use istio default controller
+    servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+      - "*"
+  ---
+  apiVersion: networking.istio.io/v1alpha3
+  kind: VirtualService
+  metadata:
+    name: bookinfo
+  spec:
     hosts:
     - "*"
----
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: bookinfo
-spec:
-  hosts:
-  - "*"
-  gateways:
-  - bookinfo-gateway
-  http:
-  - match:
-    - uri:
-        exact: /productpage
-    - uri:
-        exact: /login
-    - uri:
-        exact: /logout
-    - uri:
-        prefix: /api/v1/products
-    route:
-    - destination:
-        host: productpage
-        port:
-          number: 9080
-EOF
-```
+    gateways:
+    - bookinfo-gateway
+    http:
+    - match:
+      - uri:
+          exact: /productpage
+      - uri:
+          exact: /login
+      - uri:
+          exact: /logout
+      - uri:
+          prefix: /api/v1/products
+      route:
+      - destination:
+          host: productpage
+          port:
+            number: 9080
+  EOF
+  ```
 
-Create Gateway and Virtual Service
+  ### Create Gateway and Virtual Service
 
-```
-./01-create-gateway-virtual-service
+  ```
+  ./01-create-gateway-virtual-service
 
-gateway.networking.istio.io/bookinfo-gateway created
-virtualservice.networking.istio.io/bookinfo created
-```
+  gateway.networking.istio.io/bookinfo-gateway created
+  virtualservice.networking.istio.io/bookinfo created
+  ```
 
-Check GW and VS
+  Define gateway - how it is working
 
-```
-# kubectl -n istio-lab get gateway
-NAME               AGE
-bookinfo-gateway   2m
+  Define Virtual Service - how it is working
 
-# kubectl -n istio-lab get virtualservice
-NAME       GATEWAYS             HOSTS   AGE
-bookinfo   [bookinfo-gateway]   [*]     3m
-```
+  Check Gateway and Virtual Service
 
+  ```
+  # kubectl -n istio-lab get gateway
+  NAME               AGE
+  bookinfo-gateway   2m
+
+  # kubectl -n istio-lab get virtualservice
+  NAME       GATEWAYS             HOSTS   AGE
+  bookinfo   [bookinfo-gateway]   [*]     3m
+  ```
+
+  We are redirecting url path `/productpage` to internal service `productpage` at port `9080`.
+
+  Try accessing the url: [http://192.168.142.250/productpage](http://192.168.142.250/productpage)
+
+  If the IP address is defined in the DNS server, the internal service can be accessed using a domain name. 
+
+## 
