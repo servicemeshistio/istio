@@ -203,4 +203,153 @@ helm install . --name keepalived --namespace istio-system \
 
 ```
 
+#### Check load balancer
+
+```
+# kubectl -n istio-system get svc
+Name                     TYPE           CLUSTER-IP   EXTERNAL-IP       PORT(S)                                                                                                                                      AGE
+grafana                  ClusterIP      10.0.0.65    <none>            3000/TCP                                                                                                                                     86m
+istio-citadel            ClusterIP      10.0.0.75    <none>            8060/TCP,15014/TCP                                                                                                                           86m
+istio-egressgateway      ClusterIP      10.0.0.244   <none>            80/TCP,443/TCP,15443/TCP                                                                                                                     86m
+istio-galley             ClusterIP      10.0.0.90    <none>            443/TCP,15014/TCP,9901/TCP                                                                                                                   86m
+istio-ingressgateway     LoadBalancer   10.0.0.229   192.168.142.249   80:31380/TCP,443:31390/TCP,31400:31400/TCP,15029:31730/TCP,15030:31651/TCP,15031:30465/TCP,15032:32041/TCP,15443:31112/TCP,15020:30638/TCP   86m
+istio-pilot              ClusterIP      10.0.0.63    <none>            15010/TCP,15011/TCP,8080/TCP,15014/TCP                                                                                                       86m
+istio-policy             ClusterIP      10.0.0.88    <none>            9091/TCP,15004/TCP,15014/TCP                                                                                                                 86m
+istio-sidecar-injector   ClusterIP      10.0.0.120   <none>            443/TCP                                                                                                                                      86m
+istio-telemetry          ClusterIP      10.0.0.45    <none>            9091/TCP,15004/TCP,15014/TCP,42422/TCP                                                                                                       86m
+jaeger-agent             ClusterIP      None         <none>            5775/UDP,6831/UDP,6832/UDP                                                                                                                   86m
+jaeger-collector         ClusterIP      10.0.0.54    <none>            14267/TCP,14268/TCP                                                                                                                          86m
+jaeger-query             ClusterIP      10.0.0.14    <none>            16686/TCP                                                                                                                                    86m
+kiali                    ClusterIP      10.0.0.92    <none>            20001/TCP                                                                                                                                    86m
+prometheus               ClusterIP      10.0.0.218   <none>            9090/TCP                                                                                                                                     86m
+tracing                  ClusterIP      10.0.0.135   <none>            80/TCP                                                                                                                                       86m
+zipkin                   ClusterIP      10.0.0.158   <none>            9411/TCP                                                                                                                                     86m
+
+```
+
+#### Run bookinfo with proxy
+
+How to enable Istio for an existing application.
+
+Method 1: Use istioctl to generate the modified yaml that will include proxy cars.
+
+How to enable Istio for new application application.
+
+Let's delete the earlier `istio-lab` name space. 
+
+```
+kubectl delete ns istio-lab
+```
+
+Create name space and label for the web hooks to create proxy sidecar
+
+```
+kubectl label namespace istio-lab istio-injection=enabled
+```
+
+Deploy application
+
+```
+kubectl -n istio-lab apply -f bookinfo.yaml 
+
+service/details created
+deployment.extensions/details-v1 created
+service/ratings created
+deployment.extensions/ratings-v1 created
+service/reviews created
+deployment.extensions/reviews-v1 created
+deployment.extensions/reviews-v2 created
+deployment.extensions/reviews-v3 created
+service/productpage created
+deployment.extensions/productpage-v1 created
+
+```
+
+Check pods
+
+```
+# kubectl -n istio-lab get pods
+NAME                              READY   STATUS    RESTARTS   AGE
+details-v1-bc557b7fc-5vn22        2/2     Running   0          42s
+productpage-v1-6597cb5df9-pqx8s   2/2     Running   0          40s
+ratings-v1-5c46fc6f85-5tw4n       2/2     Running   0          42s
+reviews-v1-69dcdb544-nglxq        2/2     Running   0          42s
+reviews-v2-65fbdc9f88-lttjs       2/2     Running   0          41s
+reviews-v3-bd8855bdd-85flj        2/2     Running   0          40s
+```
+
+Create Istio Gateway and Virtual Service
+
+
+```yaml
+cat ./01-create-gateway-virtual-service
+
+#!/bin/bash
+
+ACTION=${1:-create}
+
+cat << EOF | kubectl -n istio-lab $ACTION -f -
+# Configure the ingress
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: bookinfo-gateway
+spec:
+  selector:
+    istio: ingressgateway # use istio default controller
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: bookinfo
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - bookinfo-gateway
+  http:
+  - match:
+    - uri:
+        exact: /productpage
+    - uri:
+        exact: /login
+    - uri:
+        exact: /logout
+    - uri:
+        prefix: /api/v1/products
+    route:
+    - destination:
+        host: productpage
+        port:
+          number: 9080
+EOF
+```
+
+Create Gateway and Virtual Service
+
+```
+./01-create-gateway-virtual-service
+
+gateway.networking.istio.io/bookinfo-gateway created
+virtualservice.networking.istio.io/bookinfo created
+```
+
+Check GW and VS
+
+```
+# kubectl -n istio-lab get gateway
+NAME               AGE
+bookinfo-gateway   2m
+
+# kubectl -n istio-lab get virtualservice
+NAME       GATEWAYS             HOSTS   AGE
+bookinfo   [bookinfo-gateway]   [*]     3m
+```
 
