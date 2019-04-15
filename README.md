@@ -494,7 +494,7 @@ Multiple cases:
   ### Create Gateway and Virtual Service
 
   ```
-  ./01-create-gateway-virtual-service
+  [./01-create-gateway-virtual-service](Labs/01-create-gateway-virtual-service)
 
   gateway.networking.istio.io/bookinfo-gateway created
   virtualservice.networking.istio.io/bookinfo created
