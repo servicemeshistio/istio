@@ -441,14 +441,6 @@ Multiple cases:
   Script  [01-create-gateway-virtual-service](Labs/01-create-gateway-virtual-service) has definition for a gateway and virtual service.
 
   ```yaml
-  cat ./01-create-gateway-virtual-service
-
-  #!/bin/bash
-
-  ACTION=${1:-create}
-
-  cat << EOF | kubectl -n istio-lab $ACTION -f -
-  # Configure the ingress
   apiVersion: networking.istio.io/v1alpha3
   kind: Gateway
   metadata:
@@ -526,9 +518,13 @@ Multiple cases:
 
 ## Destination rules
 
-What is a destination rule and how this is used for?
+DestinationRule is defining subsets for every service within BookInfo. Subset is using pod labels through which routing rules can be defined.
 
-```console
+Run script `kubectl -n istio-lab apply -f 02-create-destination-rules.yaml`
+
+Conents of 02-create-destination-rules.yaml
+
+```yaml
 apiVersion: networking.istio.io/v1alpha3
 kind: DestinationRule
 metadata:
@@ -592,13 +588,15 @@ spec:
       version: v2
 ---
 ```
-
-DestinationRule is defining a subset, and subset is using pod labels through which routing rules can be defined.
-
 ## Virtual Service using subsets
 
 What is a virtual service and what different things can be accomplished?
-```console
+
+Run script `kubectl -n istio-lab apply -f 03-create-reviews-virtual-service.yaml`
+
+Contents of 03-create-reviews-virtual-service.yaml
+
+```yaml
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
@@ -652,7 +650,175 @@ spec:
         subset: v1
 ---
 ```
+##Identity Based Traffic Routing
 
+Change route configuration so all traffic from a specific user "Jason" will be routed to reviews-v2
+
+Run script `kubectl -n istio-lab apply -f 04-create-reviews-user-virtual-service.yaml`
+
+Contents of 04-create-reviews-user-virtual-service.yaml
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    route:
+    - destination:
+        host: reviews
+        subset: v2
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+---
+```
+##Traffic Shifting
+
+Gradually migrate traffic from one microservice to another based on weight. For instance, send 50% of traffic from reviews-v1 to reviews-v3. 
+
+Validate Bookinfo virtual service for productpage, ratings, reviews and details is up by running `kubectl get virtualservice` OR `k get vs`
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# k get vs
+NAME          GATEWAYS             HOSTS           AGE
+bookinfo      [bookinfo-gateway]   [*]             1h
+details                            [details]       1h
+productpage                        [productpage]   1h
+ratings                            [ratings]       1h
+reviews                            [reviews]       1h
+```
+Apply the following YAML to transfer 50% traffic from reviews-1 to reviews-3.
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 05-apply-weight-based-routing.yaml
+virtualservice.networking.istio.io/reviews configured
+```
+
+Contents of 05-apply-weight-based-routing.yaml
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+      weight: 50
+    - destination:
+        host: reviews
+        subset: v3
+      weight: 50
+```
+
+Confirm the rule was replaced for reviews microservice by running `kubectl get virtualservice reviews -o yaml` OR `k get vs reviews -o yaml`
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# k get vs reviews -o yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"networking.istio.io/v1alpha3","kind":"VirtualService","metadata":{"annotations":{},"name":"reviews","namespace":"istio-lab"},"spec":{"hosts":["reviews"],"http":[{"route":[{"destination":{"host":"reviews","subset":"v1"},"weight":50},{"destination":{"host":"reviews","subset":"v3"},"weight":50}]}]}}
+  creationTimestamp: 2019-04-16T02:05:31Z
+  generation: 1
+  name: reviews
+  namespace: istio-lab
+  resourceVersion: "50804"
+  selfLink: /apis/networking.istio.io/v1alpha3/namespaces/istio-lab/virtualservices/reviews
+  uid: 1cfbe884-5fec-11e9-9989-00505632f6a0
+spec:
+  hosts:
+  - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+      weight: 50
+    - destination:
+        host: reviews
+        subset: v3
+      weight: 50
+```
+Submit 100% of the traffic to reviews-3 microservice.
+
+```Console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 06-apply-total-weight-based-routing.yaml
+virtualservice.networking.istio.io/reviews configured
+```
+Contents of 06-apply-total-weight-based-routing.yaml
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v3
+```
+
+##Fault Injection
+
+Test microservice resiliency by injecting faults
+
+###Injecting HTTP delay fault
+
+Inject a 7 second delay between reviews-v2 and ratings microservice for user "Jason". 
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 07-inject-fault-user-trafficdelay.yaml
+virtualservice.networking.istio.io/ratings configured
+```
+
+Contents of `07-inject-fault-user-trafficdelay.yaml`
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    fault:
+      delay:
+        percentage:
+          value: 100.0
+        fixedDelay: 7s
+    route:
+    - destination:
+        host: ratings
+        subset: v1
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+```
 
 ## Traffic Management
 
