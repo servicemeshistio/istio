@@ -438,7 +438,7 @@ Multiple cases:
 
   ### Istio Gateway and Virtual Service Definition
 
-  Script  [01-create-gateway-virtual-service](Labs/01-create-gateway-virtual-service) has definition for a gateway and virtual service.
+  Run YAML 01-create-gateway-virtual-service has definition for a gateway and virtual service.
 
   ```yaml
   apiVersion: networking.istio.io/v1alpha3
@@ -488,7 +488,7 @@ Multiple cases:
   ### Create Gateway and Virtual Service
 
   ```console
-  ./01-create-gateway-virtual-service
+  kubectl -n istio-lab apply -f 01-create-gateway-virtual-service.yaml 
 
   gateway.networking.istio.io/bookinfo-gateway created
   virtualservice.networking.istio.io/bookinfo created
@@ -522,7 +522,7 @@ DestinationRule is defining subsets for every service within BookInfo. Subset is
 
 Run script `kubectl -n istio-lab apply -f 02-create-destination-rules.yaml`
 
-Conents of 02-create-destination-rules.yaml
+Contents of 02-create-destination-rules.yaml
 
 ```yaml
 apiVersion: networking.istio.io/v1alpha3
@@ -650,38 +650,14 @@ spec:
         subset: v1
 ---
 ```
-##Identity Based Traffic Routing
+## Identity Based Traffic Routing
 
 Change route configuration so all traffic from a specific user "Jason" will be routed to reviews-v2
 
 Run script `kubectl -n istio-lab apply -f 04-create-reviews-user-virtual-service.yaml`
 
-Contents of 04-create-reviews-user-virtual-service.yaml
 
-```yaml
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: reviews
-spec:
-  hosts:
-    - reviews
-  http:
-  - match:
-    - headers:
-        end-user:
-          exact: jason
-    route:
-    - destination:
-        host: reviews
-        subset: v2
-  - route:
-    - destination:
-        host: reviews
-        subset: v1
----
-```
-##Traffic Shifting
+## Traffic Shifting
 
 Gradually migrate traffic from one microservice to another based on weight. For instance, send 50% of traffic from reviews-v1 to reviews-v3. 
 
@@ -701,27 +677,6 @@ Apply the following YAML to transfer 50% traffic from reviews-1 to reviews-3.
 ```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 05-apply-weight-based-routing.yaml
 virtualservice.networking.istio.io/reviews configured
-```
-
-Contents of 05-apply-weight-based-routing.yaml
-```yaml
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: reviews
-spec:
-  hosts:
-    - reviews
-  http:
-  - route:
-    - destination:
-        host: reviews
-        subset: v1
-      weight: 50
-    - destination:
-        host: reviews
-        subset: v3
-      weight: 50
 ```
 
 Confirm the rule was replaced for reviews microservice by running `kubectl get virtualservice reviews -o yaml` OR `k get vs reviews -o yaml`
@@ -761,64 +716,481 @@ Submit 100% of the traffic to reviews-3 microservice.
 [root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 06-apply-total-weight-based-routing.yaml
 virtualservice.networking.istio.io/reviews configured
 ```
-Contents of 06-apply-total-weight-based-routing.yaml
 
-```yaml
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: reviews
-spec:
-  hosts:
-    - reviews
-  http:
-  - route:
-    - destination:
-        host: reviews
-        subset: v3
-```
 
-##Fault Injection
+## Fault Injection
 
 Test microservice resiliency by injecting faults
 
-###Injecting HTTP delay fault
+### Injecting HTTP delay fault
 
-Inject a 7 second delay between reviews-v2 and ratings microservice for user "Jason". 
+Inject a 7 second delay between reviews-v2 and ratings microservice for user "Jason". This is an intentional because the there are hardcode timeouts in the microservice. 
 
+Run script 
 ```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 07-inject-fault-user-trafficdelay.yaml
 virtualservice.networking.istio.io/ratings configured
 ```
 
-Contents of `07-inject-fault-user-trafficdelay.yaml`
-```yaml
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: ratings
-spec:
-  hosts:
-  - ratings
-  http:
-  - match:
-    - headers:
-        end-user:
-          exact: jason
-    fault:
-      delay:
-        percentage:
-          value: 100.0
-        fixedDelay: 7s
-    route:
-    - destination:
-        host: ratings
-        subset: v1
-  - route:
-    - destination:
-        host: ratings
-        subset: v1
+After 7 seconds, the reviews section will display an error message:
 ```
+Error fetching product reviews!
+Sorry, product reviews are currently unavailable for this book.
+```
+There are hardcoded timeouts between `productpage` and `reviews` page at 6 seconds.
+There are hardcoded tiemouts between `reviews` and `ratings` page at 10 seconds. 
+
+Introducing the new 7 second delay, the `productpage` times out premarturely. Fault injection helps identify such anomalies without impacting end users. 
+
+If you logout of "Jason" user, the error will go away. 
+
+### Inject HTTP abort fault
+
+To test microservice resiliency, introduce HTTP abort fault. 
+
+Run script
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 08-inject-fault-user-aborttest.yaml
+virtualservice.networking.istio.io/ratings configured
+```
+
+Validate the `ratings` virtual service has applied the changes by running `k get vs ratings -o yaml`
+
+The HTTP abort to the ratings microservice for user "Jason" will load "Ratings service is not available". 
+
+If you logout of "Jason" user, the error will go away. 
+
+## TCP Traffic Shifting 
+
+Migrate TCP traffice from one version of a microservice to another. To accomplish this goal, configure a sequence of rules that route percentage of TCp traffic from one service to another. 
+
+In this task, we will deploy the tcp-echo-v1 microserive. Send 100% to this new service and route 20% of the TCP traffic to tcp-echo-v2
+
+Deploy the `tcp-echo` microservice:
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 09-create-tcpecho-service.yaml
+service/tcp-echo created
+deployment.extensions/tcp-echo-v1 created
+deployment.extensions/tcp-echo-v2 created
+```
+
+Next, enable all TCP traffic to tcp-echo-v1 microservice:
+
+Run script:
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 10-apply-tcpecho-v1-routealltraffic.yaml
+gateway.networking.istio.io/tcp-echo-gateway created
+destinationrule.networking.istio.io/tcp-echo-destination created
+virtualservice.networking.istio.io/tcp-echo created
+```
+
+```
+Validate the `tcp-echo` microservices are running:
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kgp
+NAME                              READY   STATUS    RESTARTS   AGE
+details-v1-8548c7db94-6bg57       2/2     Running   6          45h
+productpage-v1-84cc5ff8d4-5f2m5   2/2     Running   6          45h
+ratings-v1-bb7c878-ncpjh          2/2     Running   6          45h
+reviews-v1-7d56484db5-nb4vj       2/2     Running   6          45h
+reviews-v2-65f775cff6-45wx6       2/2     Running   6          45h
+reviews-v3-75594d8d75-gpq4s       2/2     Running   6          45h
+tcp-echo-v1-8694f878bf-xbt5h      2/2     Running   0          7m3s
+tcp-echo-v2-777dfc4954-dzfrv      2/2     Running   0          7m3s
+```
+
+Next, obtain the INGRESS_HOST value so traffic can be sent to the microservice.
+
+Run the following command to get the `Ingress Host` variable:
+
+```console
+export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="tcp")].port}')
+```
+Find out the value:
+```console
+[root@osc01 (istio-system)istio-scripts]# echo $INGRESS_PORT
+31400
+```
+Validate the Ingress host, port are available:
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+[root@osc01 (istio-lab)istio-scripts]# export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="tcp")].port}')
+[root@osc01 (istio-lab)istio-scripts]# echo $INGRESS_HOST
+192.168.142.250
+[root@osc01 (istio-lab)istio-scripts]# echo $INGRESS_PORT
+31400
+```
+
+Send some TCP traffic to the tcp-echo microservice:
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# for i in {1..10}; do \
+> docker run -e INGRESS_HOST=$INGRESS_HOST -e INGRESS_PORT=$INGRESS_PORT -it --rm busybox sh -c "(date; sleep 1) | nc $INGRESS_HOST $INGRESS_PORT"; \
+> done
+one Wed Apr 17 02:52:06 UTC 2019
+one Wed Apr 17 02:52:08 UTC 2019
+one Wed Apr 17 02:52:10 UTC 2019
+one Wed Apr 17 02:52:12 UTC 2019
+one Wed Apr 17 02:52:13 UTC 2019
+one Wed Apr 17 02:52:15 UTC 2019
+one Wed Apr 17 02:52:17 UTC 2019
+one Wed Apr 17 02:52:19 UTC 2019
+one Wed Apr 17 02:52:20 UTC 2019
+one Wed Apr 17 02:52:22 UTC 2019
+```
+The prefix of `one` signifies that all traffic was routed to the v1 of tcp-echo microservice.
+
+Next, setup environment to send 20% of the traffic from tcp-echo-v1 to tcp-echo-v2.
+
+Run script:
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 11-apply-tcpecho-v1-route20traffic.yaml
+virtualservice.networking.istio.io/tcp-echo configured
+```
+
+Send 20% TCP traffic:
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# for i in {1..10}; do \
+> docker run -e INGRESS_HOST=$INGRESS_HOST -e INGRESS_PORT=$INGRESS_PORT -it --rm busybox sh -c "(date; sleep 1) | nc $INGRESS_HOST $INGRESS_PORT"; \
+> done
+two Wed Apr 17 02:59:42 UTC 2019
+one Wed Apr 17 02:59:44 UTC 2019
+one Wed Apr 17 02:59:45 UTC 2019
+one Wed Apr 17 02:59:47 UTC 2019
+two Wed Apr 17 02:59:49 UTC 2019
+one Wed Apr 17 02:59:50 UTC 2019
+one Wed Apr 17 02:59:52 UTC 2019
+one Wed Apr 17 02:59:54 UTC 2019
+one Wed Apr 17 02:59:56 UTC 2019
+one Wed Apr 17 02:59:57 UTC 2019
+```
+
+2 out of the 10 timestamps have a `two`, meaning that 80% of all TCP traffic was routed to v1, whereas 20% was routed to v2.
+
+## Request Timeouts
+
+HTTP request timeouts can be specified using the timeout filed within a route rule within YAML. In default, this is set at 15 seconds. In this exercise, the timeout will be 1 second. 
+
+To see this occur, 2 second artificial delay in any calls to the `ratings ` service will be introduced. 
+
+Route requests to reviews-v2
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 12-create-reviews-route-requests.yaml
+virtualservice.networking.istio.io/reviews configured
+```
+
+Next, add a 2 second delay to calls to rating service
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 13-apply-ratings-2secdelay.yaml
+virtualservice.networking.istio.io/ratings configured
+```
+Go to BookInfo web console and refresh the page, make sure to logout from any users. 
+
+The application will be working normally, but there is a 2 second delay with every refresh. To validate the time, go to `developers tools` in Chrome/Firefox browser and validate the time under the `network` tab.
+
+Next, add a half a second request timeout for calls to reviews service.
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 14-apply-reviews-0.5sectimeout.yaml
+virtualservice.networking.istio.io/reviews configured
+```
+With this update, the returns are in 1 second instead of 2 (leverage Browser - Developer tools to validate) and the reviews are unavailable.
+
+Reason why the responses take 1 second, even though a 0.5 second timeout is configured, is because there is a hard coded re-try within the productpage microservice so its saying the reviews service is timing out twice before returning. 
+
+## Circuit Breaker
+
+In this exercise, this shows you how to configure circuit breaking for connections, requests and outlier detection and intentionally `tripping` the circuit breaker.
+
+Circuit breaking creates resilient microservices and allows application writes that limit failures, latency spikes and other network pecularities.
+
+Before getting started, deploy the `HTTPbin` microservice:
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 15-create-httpbin-service.yamlservice/httpbin created
+deployment.extensions/httpbin created
+```
+
+Validate the service pods for `HTTPbin` are available:
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kgp
+NAME                              READY   STATUS    RESTARTS   AGE
+details-v1-8548c7db94-6bg57       2/2     Running   6          46h
+httpbin-5fc7cf895d-84nl4          2/2     Running   0          10m
+productpage-v1-84cc5ff8d4-5f2m5   2/2     Running   6          46h
+ratings-v1-bb7c878-ncpjh          2/2     Running   6          46h
+reviews-v1-7d56484db5-nb4vj       2/2     Running   6          46h
+reviews-v2-65f775cff6-45wx6       2/2     Running   6          46h
+reviews-v3-75594d8d75-gpq4s       2/2     Running   6          46h
+tcp-echo-v1-8694f878bf-xbt5h      2/2     Running   0          81m
+tcp-echo-v2-777dfc4954-dzfrv      2/2     Running   0          81m
+```
+
+Create an `HTTPbin` destination rule.
+
+Note: if the existing istio install has `mTLS` authentication enabled,define a `TLS mode: MUTUAL` to the `HTTPbin` destination rule YAML.
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 16-create-httpbin-destination-rule.ymal
+destinationrule.networking.istio.io/httpbin created
+```
+
+Validate the destination rule was created:
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# k get dr httpbin
+NAME      HOST      AGE
+httpbin   httpbin   2m
+```
+
+Next, create a client called `fortio` with sidecar proxy that will send traffic to `HTTPbin` service. This is primiarily to load test the connections, concurrency and delays for all HTTP calls. 
+
+`fortio` will also trip the circuit breaker policies that are defined in the `HTTPbin` destination rule.
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f <(istioctl kube-inject -f 17-create-client-fortio.yaml)
+service/fortio created
+deployment.apps/fortio-deploy created
+```
+
+Once deployed, login to the fortio client pod:
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# FORTIO_POD=$(kubectl get pod | grep fortio | awk '{ print $1 }')
+```
+
+Use `fortio` to call `HTTPbin` service through `-curl` to indicate that you want to make 1 call:
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl exec -it $FORTIO_POD  -c fortio /usr/bin/fortio -- load -curl  http://httpbin:8000/get
+HTTP/1.1 200 OK
+server: envoy
+date: Wed, 17 Apr 2019 03:55:20 GMT
+content-type: application/json
+content-length: 371
+access-control-allow-origin: *
+access-control-allow-credentials: true
+x-envoy-upstream-service-time: 2
+
+{
+  "args": {},
+  "headers": {
+    "Content-Length": "0",
+    "Host": "httpbin:8000",
+    "User-Agent": "fortio.org/fortio-1.3.1",
+    "X-B3-Parentspanid": "616a055736063b89",
+    "X-B3-Sampled": "1",
+    "X-B3-Spanid": "8b1ef9801f095f37",
+    "X-B3-Traceid": "1e9f662f0206c78d616a055736063b89"
+  },
+  "origin": "127.0.0.1",
+  "url": "http://httpbin:8000/get"
+}
+```
+
+Now that the `fortio` client pod can make successful calls to the `HTTPbin` service, let's trip the circuit breaker.
+
+Within the `HTTPbin` destination rule: 
+For TCP, there is 1 `maxConnections`
+For HTTP, there is 1 `http1MaxPendingRequests`
+
+What this means is if you exceed 1 connection and request concurrently, the istio-proxy will show failures when the circuit is opened for more-than-1 connections and requests.
+
+Call the `HTTPbin` service with 2 (not 1) conncurent connections and send 20 (not 1) requests.
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl exec -it $FORTIO_POD  -c fortio /usr/bin/fortio -- load -c 2 -qps 0 -n 20 -loglevel Warning http://httpbin:8000/get
+04:03:46 I logger.go:97> Log level is now 3 Warning (was 2 Info)
+Fortio 1.3.1 running at 0 queries per second, 8->8 procs, for 20 calls: http://httpbin:8000/get
+Starting at max qps with 2 thread(s) [gomax 8] for exactly 20 calls (10 per thread + 0)
+04:03:46 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:03:46 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+Ended after 77.394694ms : 20 calls. qps=258.42
+Aggregated Function Time : count 20 avg 0.00760278 +/- 0.006768 min 0.001263203 max 0.027271238 sum 0.152055601
+# range, mid point, percentile, count
+>= 0.0012632 <= 0.002 , 0.0016316 , 5.00, 1
+> 0.002 <= 0.003 , 0.0025 , 10.00, 1
+> 0.003 <= 0.004 , 0.0035 , 25.00, 3
+> 0.004 <= 0.005 , 0.0045 , 30.00, 1
+> 0.005 <= 0.006 , 0.0055 , 55.00, 5
+> 0.006 <= 0.007 , 0.0065 , 70.00, 3
+> 0.007 <= 0.008 , 0.0075 , 75.00, 1
+> 0.008 <= 0.009 , 0.0085 , 90.00, 3
+> 0.025 <= 0.0272712 , 0.0261356 , 100.00, 2
+# target 50% 0.0058
+# target 75% 0.008
+# target 90% 0.009
+# target 99% 0.0270441
+# target 99.9% 0.0272485
+Sockets used: 4 (for perfect keepalive, would be 2)
+Code 200 : 18 (90.0 %)
+Code 503 : 2 (10.0 %)
+Response Header Sizes : count 20 avg 207.1 +/- 69.03 min 0 max 231 sum 4142
+Response Body/Total Sizes : count 20 avg 564.4 +/- 110.3 min 217 max 602 sum 11288
+All done 20 calls (plus 0 warmup) 7.603 ms avg, 258.4 qps
+```
+
+Overall, almost all requests made it through where the istio-proxy has some leniency:
+
+```console
+Code 200 : 18 (90.0 %)
+Code 503 : 2 (10.0 %)
+```
+
+Call the `HTTPbin` service with 3 (not 2) conncurent connections and send 30 (not 20) requests.
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl exec -it $FORTIO_POD  -c fortio /usr/bin/fortio -- load -c 3 -qps 0 -n 30 -loglevel Warning http://httpbin:8000/get
+04:06:58 I logger.go:97> Log level is now 3 Warning (was 2 Info)
+Fortio 1.3.1 running at 0 queries per second, 8->8 procs, for 30 calls: http://httpbin:8000/get
+Starting at max qps with 3 thread(s) [gomax 8] for exactly 30 calls (10 per thread + 0)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+04:06:58 W http_client.go:679> Parsed non ok code 503 (HTTP/1.1 503)
+Ended after 57.799732ms : 30 calls. qps=519.03
+Aggregated Function Time : count 30 avg 0.0038989608 +/- 0.003022 min 0.000331027 max 0.01162842 sum 0.116968824
+# range, mid point, percentile, count
+>= 0.000331027 <= 0.001 , 0.000665514 , 30.00, 9
+> 0.001 <= 0.002 , 0.0015 , 36.67, 2
+> 0.002 <= 0.003 , 0.0025 , 43.33, 2
+> 0.003 <= 0.004 , 0.0035 , 60.00, 5
+> 0.004 <= 0.005 , 0.0045 , 66.67, 2
+> 0.005 <= 0.006 , 0.0055 , 70.00, 1
+> 0.006 <= 0.007 , 0.0065 , 76.67, 2
+> 0.007 <= 0.008 , 0.0075 , 93.33, 5
+> 0.008 <= 0.009 , 0.0085 , 96.67, 1
+> 0.011 <= 0.0116284 , 0.0113142 , 100.00, 1
+# target 50% 0.0034
+# target 75% 0.00675
+# target 90% 0.0078
+# target 99% 0.0114399
+# target 99.9% 0.0116096
+Sockets used: 13 (for perfect keepalive, would be 3)
+Code 200 : 18 (60.0 %)
+Code 503 : 12 (40.0 %)
+Response Header Sizes : count 30 avg 138 +/- 112.7 min 0 max 230 sum 4140
+Response Body/Total Sizes : count 30 avg 449.66667 +/- 185.5 min 217 max 601 sum 13490
+All done 30 calls (plus 0 warmup) 3.899 ms avg, 519.0 qps
+[root@osc01 (istio-lab)istio-scripts]#
+```
+
+As the number of connections and requests went up, the circuit breaker behavior is expected. Only 60% of the requests succeeded as the remaining 40% are trapped by the circuit breaker.
+
+```console
+Code 200 : 18 (60.0 %)
+Code 503 : 12 (40.0 %)
+```
+
+Query the `istio-proxy` by logging into the `fortio` pod to see further stats on circuit breaker:
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl exec -it fortio-deploy-75f598c8dd-mhjt8  -c istio-proxy  -- sh -c 'curl localhost:15000/stats' | grep httpbin | grep pending
+cluster.outbound|8000||httpbin.istio-lab.svc.cluster.local.circuit_breakers.default.rq_pending_open: 0
+cluster.outbound|8000||httpbin.istio-lab.svc.cluster.local.circuit_breakers.high.rq_pending_open: 0
+cluster.outbound|8000||httpbin.istio-lab.svc.cluster.local.upstream_rq_pending_active: 0
+cluster.outbound|8000||httpbin.istio-lab.svc.cluster.local.upstream_rq_pending_failure_eject: 0
+cluster.outbound|8000||httpbin.istio-lab.svc.cluster.local.upstream_rq_pending_overflow: 21
+cluster.outbound|8000||httpbin.istio-lab.svc.cluster.local.upstream_rq_pending_total: 81
+```
+
+
+
+Through the `upstream_rq_pending_overflow` value, 21 calls have been flagged for circuit breaking for service `HTTPbin` by client `fortio`.
+
+## Mirroring
+
+This task demonstrates traffic mirroring, also called shadowing, capabilities. This allows teams to bring production changes with little risk because mirroring sends copy of live traffic to a mirrored service. 
+
+In this exercise, force all `HTTPbin` service traffic to version 1. Then, apply a rule to mirror a portion of that traffic to version 2.
+
+Deploy `HTTPbin` service, version 1
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 18-deploy-httpbin-v1.yaml
+deployment.extensions/httpbin-v1 created
+```
+
+Deploy `HTTPbin` service, version 2
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 19-deploy-httpbin-v2.yaml
+deployment.extensions/httpbin-v2 created
+```
+
+Validate the two version of `HTTPbin` are up and running
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kgp
+NAME                              READY   STATUS    RESTARTS   AGE
+details-v1-8548c7db94-6bg57       2/2     Running   6          47h
+fortio-deploy-75f598c8dd-mhjt8    2/2     Running   0          50m
+httpbin-5fc7cf895d-84nl4          2/2     Running   0          65m
+httpbin-v1-6569dfb499-r7xhh       2/2     Running   0          4m29s
+httpbin-v2-67c5fc7ffb-9qr7k       2/2     Running   0          57s
+productpage-v1-84cc5ff8d4-5f2m5   2/2     Running   6          47h
+ratings-v1-bb7c878-ncpjh          2/2     Running   6          47h
+reviews-v1-7d56484db5-nb4vj       2/2     Running   6          47h
+reviews-v2-65f775cff6-45wx6       2/2     Running   6          47h
+reviews-v3-75594d8d75-gpq4s       2/2     Running   6          47h
+tcp-echo-v1-8694f878bf-xbt5h      2/2     Running   0          136m
+tcp-echo-v2-777dfc4954-dzfrv      2/2     Running   0          136m
+```
+
+Deploy and start the `HTTPbin` sleep service extension to leverage curl command for load
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 20-deploy-httpbin-sleep.yaml
+deployment.extensions/sleep created
+
+```
+
+By default, kubernetes will load balance both version of `HTTPbin` service. To change that behavior, all traffic will be routed to `HTTPbin` version 1 service.
+
+Note: if the existing istio install has `mTLS` authentication enabled,define a `TLS mode: MUTUAL` to the `HTTPbin` destination rule YAML.
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-lab apply -f 21-route-httpbin-alltraffic-v1.yaml
+virtualservice.networking.istio.io/httpbin created
+destinationrule.networking.istio.io/httpbin configured
+```
+
+Send some traffic from `HTTPbin` version 1 to sleep pod
+
+```console
+[root@osc01 (istio-lab)istio-scripts]# export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
+[root@osc01 (istio-lab)istio-scripts]# kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python -m json.tool
+{
+    "headers": {
+        "Accept": "*/*",
+        "Content-Length": "0",
+        "Host": "httpbin:8000",
+        "User-Agent": "curl/7.35.0",
+        "X-B3-Parentspanid": "db31aa45c290a85f",
+        "X-B3-Sampled": "1",
+        "X-B3-Spanid": "7a433da7969422cd",
+        "X-B3-Traceid": "df7ce1045ca39ebedb31aa45c290a85f"
+    }
+}
+```
+Check the logs within `HTTPbin` v1 and v2 pods to showcase log entries exist in v1 because all traffic was routed there, and nothing in v2. 
+
+
+
+
 
 ## Traffic Management
 
