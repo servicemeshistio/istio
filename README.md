@@ -1170,7 +1170,7 @@ destinationrule.networking.istio.io/httpbin configured
 
 Send some traffic from `HTTPbin` version 1 to sleep pod
 
-```console
+```bash
 [root@osc01 (istio-lab)istio-scripts]# export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
 [root@osc01 (istio-lab)istio-scripts]# kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python -m json.tool
 {
@@ -1188,9 +1188,288 @@ Send some traffic from `HTTPbin` version 1 to sleep pod
 ```
 Check the logs within `HTTPbin` v1 and v2 pods to showcase log entries exist in v1 because all traffic was routed there, and nothing in v2. 
 
+Note: Run two bash terminals for both `HTTPbin` versions to see the logs when the curl command from above is executed.
+
+Within `HTTPbin` version 1, the following output shows the following:
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# k log -f httpbin-v1-6569dfb499-r7xhh -c httpbin
+log is DEPRECATED and will be removed in a future version. Use logs instead.
+[2019-04-18 01:49:29 +0000] [1] [INFO] Starting gunicorn 19.9.0
+[2019-04-18 01:49:29 +0000] [1] [INFO] Listening at: http://0.0.0.0:80 (1)
+[2019-04-18 01:49:29 +0000] [1] [INFO] Using worker: sync
+[2019-04-18 01:49:29 +0000] [8] [INFO] Booting worker with pid: 8
+127.0.0.1 - - [18/Apr/2019:02:46:20 +0000] "GET /headers HTTP/1.1" 200 303 "-" "curl/7.35.0"
+```
+
+Within v2, since no traffic is being passed here, the logs don't show anything.
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# k log -f httpbin-v2-67c5fc7ffb-9qr7k -c httpbin
+log is DEPRECATED and will be removed in a future version. Use logs instead.
+[2019-04-18 01:49:29 +0000] [1] [INFO] Starting gunicorn 19.9.0
+[2019-04-18 01:49:29 +0000] [1] [INFO] Listening at: http://0.0.0.0:80 (1)
+[2019-04-18 01:49:29 +0000] [1] [INFO] Using worker: sync
+[2019-04-18 01:49:29 +0000] [8] [INFO] Booting worker with pid: 8
+```
+
+For the next exercise, we will mirror 100% of traffic that is going to `HTTPbin` version 1 for version 2. 
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 22-route-httpbin-alltraffic-v2.yaml -n istio-lab
+virtualservice.networking.istio.io/httpbin configured
+```
+
+Send the traffic to `HTTPbin` version 1.
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python -m json.tool
+{
+    "headers": {
+        "Accept": "*/*",
+        "Content-Length": "0",
+        "Host": "httpbin:8000",
+        "User-Agent": "curl/7.35.0",
+        "X-B3-Parentspanid": "e86c2481d7f2d835",
+        "X-B3-Sampled": "1",
+        "X-B3-Spanid": "49ea6ca1091c8648",
+        "X-B3-Traceid": "beeed0f13b512317e86c2481d7f2d835"
+    }
+}
+```
+
+After sending the traffic above, both version of `HTTPbin` will see traffic logs because version-2 is being mirrored with version-1.
+
+Note: Run two bash terminals for both `HTTPbin` versions to see the logs when the curl command from above is executed.
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# k log -f httpbin-v2-67c5fc7ffb-9qr7k -c httpbin
+log is DEPRECATED and will be removed in a future version. Use logs instead.
+[2019-04-18 01:49:29 +0000] [1] [INFO] Starting gunicorn 19.9.0
+[2019-04-18 01:49:29 +0000] [1] [INFO] Listening at: http://0.0.0.0:80 (1)
+[2019-04-18 01:49:29 +0000] [1] [INFO] Using worker: sync
+[2019-04-18 01:49:29 +0000] [8] [INFO] Booting worker with pid: 8
+127.0.0.1 - - [18/Apr/2019:04:41:54 +0000] "GET /headers HTTP/1.1" 200 343 "-" "curl/7.35.0"
+```
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# k log -f httpbin-v1-6569dfb499-r7xhh -c httpbin
+log is DEPRECATED and will be removed in a future version. Use logs instead.
+[2019-04-18 01:49:29 +0000] [1] [INFO] Starting gunicorn 19.9.0
+[2019-04-18 01:49:29 +0000] [1] [INFO] Listening at: http://0.0.0.0:80 (1)
+[2019-04-18 01:49:29 +0000] [1] [INFO] Using worker: sync
+[2019-04-18 01:49:29 +0000] [8] [INFO] Booting worker with pid: 8
+127.0.0.1 - - [18/Apr/2019:04:41:54 +0000] "GET /headers HTTP/1.1" 200 303 "-" "curl/7.35.0"
+```
+
+Finally, to see the traffic internals of both `HTTPbin` versions, run the following command. But first, run the sleep service CURL command for HTTPbin in another console to see the internal logs
+
+For the command below:
+
+$SLEEP_POD is the sleep service pod name
+10.1.230.202 is the IP address of `HTTPbin` version 1 pod
+10.1.230.247 is the IP address of `HTTPbin` version 2 pod
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl exec -it $SLEEP_POD -c istio-proxy -- sudo tcpdump -A -s 0 host 10.1.230.202 or host 10.1.230.247
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on eth0, link-type EN10MB (Ethernet), capture size 262144 bytes
+04:52:11.317838 IP sleep-7549f66447-rmcl8.51292 > 10-1-230-247.httpbin.istio-lab.svc.cluster.local.80: Flags [P.], seq 3682856920:3682857728, ack 2162198975, win 245, options [nop,nop,TS val 10822498 ecr 10205363], length 808: HTTP: GET /headers HTTP/1.1
+E..\..@.@...
+...
+....\.P.............).....
+..#b....GET /headers HTTP/1.1
+host: httpbin-shadow:8000
+user-agent: curl/7.35.0
+accept: */*
+x-forwarded-proto: http
+x-request-id: daf32666-b70f-9fdb-8935-f451be45e582
+x-envoy-decorator-operation: httpbin.istio-lab.svc.cluster.local:8000/*
+x-istio-attributes: Cj8KF2Rlc3RpbmF0aW9uLnNlcnZpY2UudWlkEiQSImlzdGlvOi8vaXN0aW8tbGFiL3NlcnZpY2VzL2h0dHBiaW4KQQoYZGVzdGluYXRpb24uc2VydmljZS5ob3N0EiUSI2h0dHBiaW4uaXN0aW8tbGFiLnN2Yy5jbHVzdGVyLmxvY2FsCiUKGGRlc3RpbmF0aW9uLnNlcnZpY2UubmFtZRIJEgdodHRwYmluCiwKHWRlc3RpbmF0aW9uLnNlcnZpY2UubmFtZXNwYWNlEgsSCWlzdGlvLWxhYgo9Cgpzb3VyY2UudWlkEi8SLWt1YmVybmV0ZXM6Ly9zbGVlcC03NTQ5ZjY2NDQ3LXJtY2w4LmlzdGlvLWxhYg==
+x-b3-traceid: d76c34ca9d2afafe2ca5c6f1ccf98983
+x-b3-spanid: 2ca5c6f1ccf98983
+x-b3-sampled: 1
+x-envoy-internal: true
+x-forwarded-for: 10.1.230.225
+content-length: 0
+
+
+04:52:11.322771 IP 10-1-230-247.httpbin.istio-lab.svc.cluster.local.80 > sleep-7549f66447-rmcl8.51292: Flags [P.], seq 1:580, ack 808, win 266, options [nop,nop,TS val 10822503 ecr 10822498], length 579: HTTP: HTTP/1.1 200 OK
+E..w. @.?...
+...
+....P.\...........
+.D.....
+..#g..#bHTTP/1.1 200 OK
+server: istio-envoy
+date: Thu, 18 Apr 2019 04:52:11 GMT
+content-type: application/json
+content-length: 343
+access-control-allow-origin: *
+access-control-allow-credentials: true
+x-envoy-upstream-service-time: 2
+
+{
+  "headers": {
+    "Accept": "*/*",
+    "Content-Length": "0",
+    "Host": "httpbin-shadow:8000",
+    "User-Agent": "curl/7.35.0",
+    "X-B3-Parentspanid": "2ca5c6f1ccf98983",
+    "X-B3-Sampled": "1",
+    "X-B3-Spanid": "5068095531ea1c31",
+    "X-B3-Traceid": "d76c34ca9d2afafe2ca5c6f1ccf98983",
+    "X-Envoy-Internal": "true"
+  }
+}
+
+04:52:11.322786 IP sleep-7549f66447-rmcl8.51292 > 10-1-230-247.httpbin.istio-lab.svc.cluster.local.80: Flags [.], ack 580, win 254, options [nop,nop,TS val 10822503 ecr 10822503], length 0
+E..4..@.@..*
+...
+....\.P...................
+..#g..#g
+```
+
+## Control Ingress Traffic
+
+Within Kubernetes, K8s ingress resource specific services that should be exposed outside the cluster. Within istio, use the Gateway to allow monitoring and applying route rules to traffic entering the cluster.
+
+In this exercise, Istio will be configured to expose a service outside of Istio using Gateway.
+
+Note: Make sure you are `cd` into the `istio` directory.
+
+Identify the ingress gateway details, and take a note of the external IP address:
+
+```bash
+[root@osc01 (istio-system)istio-1.1.2]# kgsvc istio-ingressgateway
+NAME                   TYPE           CLUSTER-IP   EXTERNAL-IP       PORT(S)                                                                                                                                      AGE
+istio-ingressgateway   LoadBalancer   10.0.0.156   192.168.142.250   80:31380/TCP,443:31390/TCP,31400:31400/TCP,15029:31391/TCP,15030:31040/TCP,15031:31396/TCP,15032:30231/TCP,15443:32612/TCP,15020:31795/TCP   3d
+```
+
+The external-ip will be the ingress gateway and since it exist, this confirms an external loadbalancer is deployed, which is Keepalived. If the external-ip is `none` or `pending`, then the existing environment doesn't have an external load balancer for the ingress gateway. To bypass, the service type can be changed from `ClusterIP` to `NodePort`
+
+Capture the external-ip host, port and secure ingress port.
+
+Identify the Ingress host, which is `192.168.142.150`:
+```bash
+[root@osc01 (istio-system)istio-1.1.2]# kgsvc istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+192.168.142.250
+```
+
+Identify the Ingress port, which is `80`"
+```bash
+[root@osc01 (istio-system)istio-1.1.2]# kgsvc istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].port}'
+80
+```
+
+Identify the Secure Ingress Port, which is `443`:
+```bash
+[root@osc01 (istio-system)istio-1.1.2]# kgsvc istio-ingressgateway -o jsonpath=.spec.ports[?(@.name=="https")].port}'
+443
+```
+If DNS is enabled or if a hostname is defined, the external-ip value might be a host name, instead of an IP address. 
+
+If an external load balancer is not enabled, leverage the service nodeport to identify the ingress port and secure port.
+
+For ingress port without an external load balancer, which is `31380`:
+```bash
+[root@osc01 (istio-system)istio-1.1.2]# kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}'
+31380
+```
+
+For secure ingress port with an external load balancer, which is `31390`:
+```bash
+[root@osc01 (istio-system)istio-1.1.2]# kubectl -n istio-system get service -ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}'
+31390
+```
+
+### Configure ingress using Istio Gateway
+
+The ingress gateway will operate at the edge to receive incoming HTTP/TCP connections. It configures exposed ports, protocols etc. Outside of kubernetes ingress resources, this gateway will not contain any traffic routing configurations. 
+
+To enable such routing configurations for ingress traffic, istio routing rules will be enabled. This is similar to internal service requests.
+
+First, create an Istio gateway on port 80 for HTTP traffic:
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 23-create-gateway-httpbin80.yaml -n istio-lab
+gateway.networking.istio.io/httpbin-gateway created
+```
+
+Configure and enable routes for traffic entering the gateway for `Httpbin` on Port 8000, for two route rules under paths `/status` and `/delay`.
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 24-apply-routes-httpbin80.yaml -n istio-lab
+virtualservice.networking.istio.io/httpbin configured
+```
+
+Access the `HTTPbin` service using curl, confirm and correct ingress host and ingress port:
+
+```bash
+31390[root@osc01 (istio-system)istio-1.1.2]# curl -I -HHost:httpbin.example.com h/192.168.142.250:80/status/200
+HTTP/1.1 200 OK
+server: istio-envoy
+date: Thu, 18 Apr 2019 05:37:15 GMT
+content-type: text/html; charset=utf-8
+access-control-allow-origin: *
+access-control-allow-credentials: true
+content-length: 0
+x-envoy-upstream-service-time: 3
+```
+
+Note the `access-control-allow-origin` value is `*`. What this means is that the incoming request is coming for any possible host.
+
+Try and test out the same curl command above, but with a different host name. The output should be a `HTTP 404 error`. This is becuase the current ingress external-ip and/or hostname is the only istio configured gateway that can accept incoming traffic.
+
+```bash
+[root@osc01 (istio-system)istio-1.1.2]# curl -I -HHost:httpbin.example1.com http://192.168.142.250:80/status/200
+
+HTTP/1.1 404 Not Found
+date: Thu, 18 Apr 2019 05:47:04 GMT
+server: istio-envoy
+transfer-encoding: chunked
+```
+
+### Access ingress services using a browser
+
+To resolve `HTTPbin`'s current host name of `httpbin.example.com`, configure the host with DNS server. Since we're not working with a DNS environment, use `*` in place of host. This allows gateway and virtual configurations to allow traffic coming from any host value. 
+
+Apply the new ingress gateway and virtual service YMAL to allow incoming traffic through `HTTPbin` via any open `*` host:
+
+```bash
+[root@osc01 (istio-system)istio-scripts]# kubectl apply -f 25-apply-httpbin-vs-dr-anyhost.yaml -n istio-lab
+gateway.networking.istio.io/httpbin-gateway configured
+virtualservice.networking.istio.io/httpbin configured
+```
+
+Navigate to a browser and enter: `http://192.168.142.250:31380/headers`
+
+Which is the `http://INGRESS_HOST:INGRESS_PORT_WO_LOADBALANCER`
+
+Output should look like this:
+```console
+{
+  "headers": {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3", 
+    "Accept-Encoding": "gzip, deflate", 
+    "Accept-Language": "en-US,en;q=0.9", 
+    "Content-Length": "0", 
+    "Host": "192.168.142.250:31380", 
+    "Upgrade-Insecure-Requests": "1", 
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36", 
+    "X-B3-Parentspanid": "ad30f94b17ed48c3", 
+    "X-B3-Sampled": "1", 
+    "X-B3-Spanid": "3bc6f2a41d96c60f", 
+    "X-B3-Traceid": "5dd2dc4ea1db35ccad30f94b17ed48c3", 
+    "X-Envoy-Internal": "true"
+  }
+}
+```
+
+To re-cap, the Istio gateway configuration allows external traffic to enter based on traffic and policy features configured at the edge services.
 
 
 
+## Show steps of upgrading BookInfo from one version to another
 
 ## Traffic Management
 
