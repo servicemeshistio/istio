@@ -1467,7 +1467,463 @@ Output should look like this:
 
 To re-cap, the Istio gateway configuration allows external traffic to enter based on traffic and policy features configured at the edge services.
 
+## Control Egress Traffic
 
+Any outbound traffic from a pod is re-directed to its sidecar proxy. Accessbility of URLs outside of the cluster depends on proxy configuration. 
+
+By default, Istio configures sidecar proxy to pass through requests of unknown services. 
+
+In this exercise, egress will enable stricter control by: 
+-Allow sidecar to pass requests through to services that aren't configured inside the mesh
+-Configure service entries to provide controlled access to external services
+-Bypass sidecar for range of IPs.
+
+### Envoy passthrough to external services
+
+Allow outbound traffic for `global.outboundTrafficPolicy.mode` that allows/restricts sidecar to handle external services. This is specifically for services that are not defined by Istio's service registry. The property will have options of `ALLOW_ANY` and `REGISTRY_ONLY`:
+
+-`ALLOW_ANY` is default and allows calls to unknown services to pass through
+-`REGISTER_ONLY` blocks any host that doesn't have a HTTP service or service entry defined within Istio.
+
+We'll start with validating the existing value of istio config map and it's outbound traffic policy mode:
+
+```bash
+[root@osc01 (istio-system)~]# kubectl get configmap istio -n istio-system -o yaml | grep -o "mode: ALLOW_ANY"
+mode: ALLOW_ANY
+```
+
+Since it allows all calls, run the sleep pod to confirm outgoing calls to hosts such as google, cnn etc.:
+
+```bash
+[root@osc01 (istio-lab)~]# kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl -I https://www.google.com | grep  "HTTP/"; kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl -I https://edition.cnn.com | grep "HTTP/"
+HTTP/1.1 200 OK
+HTTP/1.1 200 OK
+```
+This confirms that with egress outbound policy, all traffic is permissible through Istio. 
+This drawback with this setup, any Istio calls to external services will not be available in the Mixer log. This can be changed by enabling controlled access for HTTP headers.
+
+### Controlled access to external services
+
+The `ServiceEntry` configruations allows access to publicly accessible services within Istio cluster. We'll enable access to an HTTP & HTTPS external service without losing monitoring and control features.
+
+Enable access to external service by changing `global.outboundTrafficPolicy.mode` from `ALLOW_ANY` to `REGISTRY_ONLY` within istio config map under `istio-system` namespace.
+
+```bash
+[root@osc01 (istio-system)~]# kubectl get configmap istio -n istio-system -o yaml | sed 's/mode: ALLOW_ANY/mode: REGISTRY_ONLY/g' | kubectl replace -n istio-system -f -
+configmap/istio replaced
+```
+
+Make requests to the external services like: Google, CNN using sleep pod within `istio-lab` napesapce and validate the request is blocked. 
+Reason why its blocked is because a `ServiceEntry` for these external services hasn't been created with the new traffic policy mode.
+
+Note: it might take a couple of changes for the egress outbound policy changes to take affect. Re-run the command, if the connection is a success.
+
+```bash
+[root@osc01 (istio-lab)~]# kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl -I https://www.google.com | grep  "HTTP/"; kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl -I https://edition.cnn.com | grep "HTTP/"
+command terminated with exit code 35
+command terminated with exit code 35
+```
+### Accessing external HTTP service
+
+Create a `ServiceEntry` YAML to allow HTTP access to external `HTTPbin` service.
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 26-create-serviceentry-http-ext.yaml -n istio-lab
+serviceentry.networking.istio.io/httpbin-ext created
+```
+
+Make a request to the external `HTTPbin` service from sleep pod:
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl http://httpbin.org/headers
+{
+  "headers": {
+    "Accept": "*/*",
+    "Host": "httpbin.org",
+    "User-Agent": "curl/7.35.0",
+    "X-B3-Sampled": "1",
+    "X-B3-Spanid": "1f6269a5421a30ca",
+    "X-B3-Traceid": "d9c73798e2a6b0711f6269a5421a30ca",
+    "X-Envoy-Decorator-Operation": "httpbin.org:80/*",
+    "X-Istio-Attributes": "CiwKHWRlc3RpbmF0aW9uLnNlcnZpY2UubmFtZXNwYWNlEgsSCWlzdGlvLWxhYgopChhkZXN0aW5hdGlvbi5zZXJ2aWNlLm5hbWUSDRILaHR0cGJpbi5vcmcKPQoKc291cmNlLnVpZBIvEi1rdWJlcm5ldGVzOi8vc2xlZXAtNzU0OWY2NjQ0Ny1ybWNsOC5pc3Rpby1sYWIKKQoYZGVzdGluYXRpb24uc2VydmljZS5ob3N0Eg0SC2h0dHBiaW4ub3Jn"
+  }
+}
+```
+
+The HTTP headers are added by the sidecar and defined in the `X-Envoy-Decorator-Operation` property.
+
+Check the logs of the istio sidecar for sleep pod and validate it's available.
+
+!DIDN'T WORK!
+```console
+kubectl logs $SOURCE_POD -c istio-proxy | tail
+Output -> check logsoutput.txt under path 
+```
+
+Check the Mixer log to see if Istio is deployed in `istio-system`.
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-system logs -l istio-mixer-type=telemetry -c mixer | grep 'httpbin.org'
+{"level":"info","time":"2019-04-18T21:06:16.043445Z","instance":"accesslog.logentry.istio-system","apiClaims":"","apiKey":"","clientTraceId":"","connection_security_policy":"unknown","destinationApp":"","destinationIp":"AAAAAAAAAAAAAP//AAAAAA==","destinationName":"unknown","destinationNamespace":"default","destinationOwner":"unknown","destinationPrincipal":"","destinationServiceHost":"","destinationWorkload":"unknown","grpcMessage":"","grpcStatus":"","httpAuthority":"httpbin.org","latency":"761.837µs","method":"GET","permissiveResponseCode":"none","permissiveResponsePolicyID":"none","protocol":"http","receivedBytes":143,"referer":"","reporter":"source","requestId":"131c6767-1354-9b24-9859-528b6e84b583","requestSize":0,"requestedServerName":"","responseCode":404,"responseFlags":"NR","responseSize":0,"responseTimestamp":"2019-04-18T21:06:16.043896Z","sentBytes":54,"sourceApp":"sleep","sourceIp":"AAAAAAAAAAAAAP//CgHm5Q==","sourceName":"sleep-7549f66447-rmcl8","sourceNamespace":"istio-lab","sourceOwner":"kubernetes://apis/apps/v1/namespaces/istio-lab/deployments/sleep","sourcePrincipal":"","sourceWorkload":"sleep","url":"/headers","userAgent":"curl/7.35.0","xForwardedFor":"0.0.0.0"}
+{"level":"info","time":"2019-04-18T21:06:30.896517Z","instance":"accesslog.logentry.istio-system","apiClaims":"","apiKey":"","clientTraceId":"","connection_security_policy":"unknown","destinationApp":"","destinationIp":"AAAAAAAAAAAAAP//AAAAAA==","destinationName":"unknown","destinationNamespace":"default","destinationOwner":"unknown","destinationPrincipal":"","destinationServiceHost":"","destinationWorkload":"unknown","grpcMessage":"","grpcStatus":"","httpAuthority":"httpbin.org","latency":"168.903µs","method":"GET","permissiveResponseCode":"none","permissiveResponsePolicyID":"none","protocol":"http","receivedBytes":143,"referer":"","reporter":"source","requestId":"eecb6335-4448-9074-9728-f2616fc7081f","requestSize":0,"requestedServerName":"","responseCode":404,"responseFlags":"NR","responseSize":0,"responseTimestamp":"2019-04-18T21:06:30.896607Z","sentBytes":54,"sourceApp":"sleep","sourceIp":"AAAAAAAAAAAAAP//CgHm5Q==","sourceName":"sleep-7549f66447-rmcl8","sourceNamespace":"istio-lab","sourceOwner":"kubernetes://apis/apps/v1/namespaces/istio-lab/deployments/sleep","sourcePrincipal":"","sourceWorkload":"sleep","url":"/headers","userAgent":"curl/7.35.0","xForwardedFor":"0.0.0.0"}
+{"level":"info","time":"2019-04-18T21:25:36.896593Z","instance":"accesslog.logentry.istio-system","apiClaims":"","apiKey":"","clientTraceId":"","connection_security_policy":"unknown","destinationApp":"","destinationIp":"A1WakA==","destinationName":"unknown","destinationNamespace":"default","destinationOwner":"unknown","destinationPrincipal":"","destinationServiceHost":"httpbin.org","destinationWorkload":"unknown","grpcMessage":"","grpcStatus":"","httpAuthority":"httpbin.org","latency":"149.492349ms","method":"GET","permissiveResponseCode":"none","permissiveResponsePolicyID":"none","protocol":"http","receivedBytes":186,"referer":"","reporter":"source","requestId":"cd638beb-58e1-9357-b721-5db002e470a9","requestSize":0,"requestedServerName":"","responseCode":200,"responseFlags":"-","responseSize":575,"responseTimestamp":"2019-04-18T21:25:37.045863Z","sentBytes":888,"sourceApp":"sleep","sourceIp":"AAAAAAAAAAAAAP//CgHm5Q==","sourceName":"sleep-7549f66447-rmcl8","sourceNamespace":"istio-lab","sourceOwner":"kubernetes://apis/apps/v1/namespaces/istio-lab/deployments/sleep","sourcePrincipal":"","sourceWorkload":"sleep","url":"/headers","userAgent":"curl/7.35.0","xForwardedFor":"0.0.0.0"}
+```
+
+Within the Mixer log, the `destinationServiceHost` attribute is set to `httpbin.org`. Using egress traffic control, monitoring is enabled for external HTTP services including related information around access.
+
+### Accessing external HTTPS service
+
+Create a `ServiceEntry` YAML to allow HTTPS access to external `HTTPbin` service.
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 27-create-serviceentry-https-ext.yaml -n istio-lab
+serviceentry.networking.istio.io/google created
+```
+
+Initiate a request to the external HTTPS service to google from the sleep pod:
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl -I https://www.google.com | grep  "HTTP/"
+HTTP/1.1 200 OK
+```
+
+Check the sidecar proxy log:
+
+!DIDN'T WORK!
+```console
+kubectl logs $SOURCE_POD -c istio-proxy | tail
+Output -> check logsoutput.txt under path 
+```
+Check the mixer log to see if Istio is deployed in `istio-system`.
+
+```bash
+[root@osc01 (istio-lab)~]# kubectl -n istio-system logs -l istio-mixer-type=telemetry -c mixer | grep 'www.google.com'
+{"level":"info","time":"2019-04-20T02:51:39.539649Z","instance":"tcpaccesslog.logentry.istio-system","connectionDuration":"0s","connectionEvent":"open","connection_security_policy":"unknown","destinationApp":"","destinationIp":"rNmkhA==","destinationName":"unknown","destinationNamespace":"default","destinationOwner":"unknown","destinationPrincipal":"","destinationServiceHost":"www.google.com","destinationWorkload":"unknown","protocol":"tcp","receivedBytes":0,"reporter":"source","requestedServerName":"www.google.com","responseFlags":"","sentBytes":0,"sourceApp":"sleep","sourceIp":"CgHnFg==","sourceName":"sleep-7549f66447-rmcl8","sourceNamespace":"istio-lab","sourceOwner":"kubernetes://apis/apps/v1/namespaces/istio-lab/deployments/sleep","sourcePrincipal":"","sourceWorkload":"sleep","totalReceivedBytes":0,"totalSentBytes":0}
+{"level":"info","time":"2019-04-20T02:51:39.635535Z","instance":"tcpaccesslog.logentry.istio-system","connectionDuration":"131.633351ms","connectionEvent":"close","connection_security_policy":"unknown","destinationApp":"","destinationIp":"rNmkhA==","destinationName":"unknown","destinationNamespace":"default","destinationOwner":"unknown","destinationPrincipal":"","destinationServiceHost":"www.google.com","destinationWorkload":"unknown","protocol":"tcp","receivedBytes":561,"reporter":"source","requestedServerName":"www.google.com","responseFlags":"","sentBytes":3225,"sourceApp":"sleep","sourceIp":"CgHnFg==","sourceName":"sleep-7549f66447-rmcl8","sourceNamespace":"istio-lab","sourceOwner":"kubernetes://apis/apps/v1/namespaces/istio-lab/deployments/sleep","sourcePrincipal":"","sourceWorkload":"sleep","totalReceivedBytes":561,"totalSentBytes":3225}
+```
+
+### Manage traffic to external services
+
+Similar to inter-cluster requests, Istio routing rules can also be set for external services that are accessed using `ServiceEntry` configurations. 
+
+Set timeout rules on class to the `httpbin.org` service using sleep pod and initiating a `delay`.
+
+From inside the pod, initiate a curl request to delay endpoint of `httpbin.org` external service
+
+```bash
+[root@osc01 (istio-lab)~]# kubectl exec -it  sleep-7549f66447-rmcl8 -c sleep sh
+# curl -o /dev/null -s -w "%{http_code}\n" http://httpbin.org/delay/5
+200
+```
+
+Within 5 seconds, the output should be 200 (OK). Exit out of the pod and use `kubectl` to apply a 3s timeout on calls to the `httpbin.org` external service.
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 28-apply-3sec-timeout-httpbin.yaml
+virtualservice.networking.istio.io/httpbin-ext created
+```
+
+After a few seconds, run the same curl request:
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl exec -it  sleep-7549f66447-rmcl8 -c sleep sh
+# curl -o /dev/null -s -w "%{http_code}\n" http://httpbin.org/delay/5
+504
+```
+
+This time, there's 504 (gateway timeout) error versus a 200 (OK) output. Although `httpbin.org` was waiting 5 seconds, istio's timeout request set at 3 seconds, cut off the request.
+
+### Direct access to external services
+
+Bypassing Istio for a specific IP range can be setup, by configuring sidecars to prevent them from intercepting external requests. To setup this bypass change `global.proxy.includeIPRanges` or `global.proxy.excludeIPRanges` configuration option and update `istio-sidecar-injector` configuration. This process will affect all future pod deployments. 
+
+This approach is only recommended as a last resort when, for performance or other reasons, external access can't be configured using sidecar as Istio's features will be completely disabled for the specified IPs. 
+
+An easy way to exclude all external IPs from being redirected to the sidecar is to set `global.proxy.includeIPRanges` for IP range or ranges used for internal cluster services.  
+
+#### Determine the IP ranges
+
+Set the value for `global.proxy.includeIPRanges` in accordance to the cluster provider.
+
+For IBM Cloud Private, CD to the cluster folder within ICP.
+
+```bash
+[root@osc01 (istio-lab)icp3.1.2]# pwd
+/opt/ibm/icp3.1.2
+[root@osc01 (istio-lab)icp3.1.2]# cat cluster/config.yaml | grep service_cluster_ip_range
+# service_cluster_ip_range: 10.0.0.0/16
+service_cluster_ip_range: 10.0.0.1/24
+```
+
+#### Configure proxy bypass
+
+Update `istio-sidecar-injector` configmap using the IP ranges specific to your cluster provider. 
+
+```bash
+[root@osc01 (istio-lab)istio-1.1.2]# helm template install/kubernetes/helm/istio --set global.proxy.includeIPRanges="10.0.0.1/24" -x templates/sidecar-injector-configmap.yaml | kubectl apply -f -
+configmap/istio-sidecar-injector created
+```
+
+#### Access external services
+
+Now that the bypass config will affect new deployments, the sleep pod will need to be redeployed.
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 29-create-sleep-service-account.yaml
+serviceaccount/sleep created
+service/sleep created
+deployment.extensions/sleep configured
+```
+
+After `istio-sidecar-injector` configmap and redeployment of the `sleep` pod, Istio's sidecar will intercept and manage internal requests within the cluster. Any external requests will bypass the sidecar and go to its destination. 
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# k exec -it sleep-75b799df5f-csgb6 -c sleep curl http://httpbin.org/headers
+{
+  "headers": {
+    "Accept": "*/*",
+    "Host": "httpbin.org",
+    "User-Agent": "curl/7.35.0",
+    "X-B3-Sampled": "1",
+    "X-B3-Spanid": "986b188d5f866f39",
+    "X-B3-Traceid": "8ab07b42ddc84025986b188d5f866f39",
+    "X-Envoy-Decorator-Operation": "httpbin.org:80/*",
+    "X-Envoy-Expected-Rq-Timeout-Ms": "3000",
+    "X-Istio-Attributes": "Cj0KCnNvdXJjZS51aWQSLxIta3ViZXJuZXRlczovL3NsZWVwLTc1Yjc5OWRmNWYtY3NnYjYuaXN0aW8tbGFiCikKGGRlc3RpbmF0aW9uLnNlcnZpY2UuaG9zdBINEgtodHRwYmluLm9yZwopChhkZXN0aW5hdGlvbi5zZXJ2aWNlLm5hbWUSDRILaHR0cGJpbi5vcmcKLAodZGVzdGluYXRpb24uc2VydmljZS5uYW1lc3BhY2USCxIJaXN0aW8tbGFi"
+  }
+}
+```
+
+Notice the `headers` property, there aren't any for either HTTP or HTTPS external services. Logs will also not appear in the mixer log. Bypassing the istio sidecars means you can no longer monitor the access to external services.
+
+#### Summary
+
+In this section, we looked at:
+
+1) Configure sidecar to allow access for any external service:
+
+This directs traffic through Istio sidecar, include calls to external services that unknown within the mesh. There is no monitoring of the external services, so traffic control can't be fully leveraged. 
+
+2) Use service entry to register an accessible external service inside the mesh. (Recommended)
+
+Creating service entries allows use of all the same Istio features for calls to services inside and outside of the cluster. Monitoring is always available to external services by setting timeouts to external service. 
+
+3) Configure Istio sidecar to exclude external IP that are not defined within the internal mesh range.
+
+This bypasses sidecar and gives access to the external services directly. To do this setup, requires access to the cluster manager and knowledge of the environment where Istio is hosted. Monitoring will not be available for access of external services and istio features will not be available for traffic management.
+
+Note: Implementing egress traffic controle more securly, direct egress traffic through an egress gateway and review security concerns.
+
+# POlicies
+
+## Enabling Policies
+
+This shows how to enable istio policy enforcement
+
+The default Istio install has policy enforcemnt diabled. To install Istio with policy enforcement, use `--set global.disablePolicyChecks=false`
+
+Check the status of policy enforcement for Istio
+
+```bash
+[root@osc01 (istio-lab)policies]# kubectl -n istio-system get cm istio -o jsonpath="{@.data.mesh}" | grep disablePolicyChecks
+disablePolicyChecks: false
+```
+
+Since policy enforcement is enabled, no further action is required. 
+
+If it is disabled, edit the `istio` config map and enable policy checks.
+
+Note: validate you're in the following path to confirm the status of the policy check:
+
+
+```bash
+[root@osc01 (istio-lab)istio-1.1.2]# pwd
+/opt/ibm/icp3.1.2/cluster/istio-1.1.2
+
+[root@osc01 (istio-lab)istio-1.1.2]# helm template install/kubernetes/helm/istio --namespace=istio-system -x templates/configmap.yaml --set global.disablePolicyChecks=false | kubectl -n istio-system replace -f -
+configmap/istio replaced
+```
+## Enabling Rate Limits
+
+This shows how to use Istio by dynamically limiting traffic to a service. 
+
+Validate the BookInfo app is installed and its virtualservice is deployed. 
+
+```bash
+[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 03-create-reviews-virtual-service.yaml
+virtualservice.networking.istio.io/productpage unchanged
+virtualservice.networking.istio.io/reviews unchanged
+virtualservice.networking.istio.io/ratings unchanged
+virtualservice.networking.istio.io/details unchanged
+```
+
+Configure Istio to rate limit traffic to the `productpage` based on IP address of the client. Use `X-Forwarded-For ` request header as the client IP address. Use conditional rate limit that exempts logged in users. 
+
+Enable a memory quote `memquota` to enable rate limits. If running in production, `redis` is required and its `redisquota` quota. 
+
+Both `memquota` and `redisquota` support the quota template, so configuration to enable rate limits on both adapters is the same. 
+
+Client side rate limitions is in 2 parts:
+-`QuotaSpec` defines quota name and amount that the client should request.
+-`QuotaSpecBinding` conditionally associates `QuotaSpec` with one or more services.
+
+Mixer side rate limitations:
+-`quota instance` defines quota by Mixer
+-`memquota handler` defines `memquota` configuration
+-`quota rule` defines when quota instance is dispatched to `memquota` adapter.
+
+Run the `memquota` YAML to enable rate limits:
+
+Note: Ensure you're running Istio v1.1.2 and higher.
+
+```bash
+[root@osc01 (istio-system)policies]# kubectl apply -f 01-create-memquota-ratelimit.yaml
+handler.config.istio.io/quotahandler created
+instance.config.istio.io/requestcountquota created
+quotaspec.config.istio.io/request-count created
+quotaspecbinding.config.istio.io/request-count created
+rule.config.istio.io/quota created
+```
+
+The memquota handler has 3 different rate limits. By default, if there are no overrides, there are 500 requests per one second (1s). 
+From the YAML above, two overrides are defined:
+
+1) 1 request every 5 seconds, if destination is `reviews`.
+2) 2 requests every 5 seconds, if destination is `productpage`.
+
+When a request is processed, first matching override is picked.
+
+If working with a production environment, the `redisquota` handles 4 different rate limit schemes. it uses `ROLLING_WINDOW` algorithm for quota check and defines `bucketDuration` of 500s. By default, if there are no overrides, there are 500 requests per one second (1s). 
+It has three overrides defined: 
+
+1) 1 request, if destination is `reviews`
+2) Second is 500, if destination is `productpage` and source is `10.28.11.20`
+3) 2, if destination is `productpage
+
+When a request is processed, first matching override is picked.
+
+Validate the `quota instance` was created:
+
+```YAML
+[root@osc01 (istio-system)policies]# kubectl -n istio-system get instance requestcountquota -o yaml
+apiVersion: config.istio.io/v1alpha2
+kind: instance
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"config.istio.io/v1alpha2","kind":"instance","metadata":{"annotations":{},"name":"requestcountquota","namespace":"istio-system"},"spec":{"compiledTemplate":"quota","params":{"dimensions":{"destination":"destination.labels[\"app\"] | destination.service.name | \"unknown\"","destinationVersion":"destination.labels[\"version\"] | \"unknown\"","source":"request.headers[\"x-forwarded-for\"] | \"unknown\""}}}}
+  creationTimestamp: 2019-04-20T04:37:31Z
+  generation: 1
+  name: requestcountquota
+  namespace: istio-system
+  resourceVersion: "177417"
+  selfLink: /apis/config.istio.io/v1alpha2/namespaces/istio-system/instances/requestcountquota
+  uid: 02be487a-6326-11e9-8154-00505632f6a0
+spec:
+  compiledTemplate: quota
+  params:
+    dimensions:
+      destination: destination.labels["app"] | destination.service.name | "unknown"
+      destinationVersion: destination.labels["version"] | "unknown"
+      source: request.headers["x-forwarded-for"] | "unknown"
+```
+
+The quota template has 3 dimensions used by `memquota` (as shown above) or in `redisquota` to enable overrides on requests that match certain attributes. 
+
+Confirm the `quota rule` was created:
+
+```yaml
+[root@osc01 (istio-system)policies]# kubectl -n istio-system get rule quota -o yaml
+apiVersion: config.istio.io/v1alpha2
+kind: rule
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"config.istio.io/v1alpha2","kind":"rule","metadata":{"annotations":{},"name":"quota","namespace":"istio-system"},"spec":{"actions":[{"handler":"quotahandler","instances":["requestcountquota"]}]}}
+  creationTimestamp: 2019-04-20T04:37:31Z
+  generation: 1
+  name: quota
+  namespace: istio-system
+  resourceVersion: "177421"
+  selfLink: /apis/config.istio.io/v1alpha2/namespaces/istio-system/rules/quota
+  uid: 02c309b0-6326-11e9-8154-00505632f6a0
+spec:
+  actions:
+  - handler: quotahandler
+    instances:
+    - requestcountquota
+```
+
+A rule tells Mixer to invoke either `memquota` or `redisquota` handler and pass it to the `requestcountquota` instance. This maps `quota` template to `memquota` or `redisquota` handler.
+
+Confirm the `QuotaSpec` was created:
+
+```yaml
+[root@osc01 (istio-system)policies]# kubectl -n istio-system get QuotaSpec request-count -o yaml
+apiVersion: config.istio.io/v1alpha2
+kind: QuotaSpec
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"config.istio.io/v1alpha2","kind":"QuotaSpec","metadata":{"annotations":{},"name":"request-count","namespace":"istio-system"},"spec":{"rules":[{"quotas":[{"charge":1,"quota":"requestcountquota"}]}]}}
+  creationTimestamp: 2019-04-20T04:37:31Z
+  generation: 1
+  name: request-count
+  namespace: istio-system
+  resourceVersion: "177418"
+  selfLink: /apis/config.istio.io/v1alpha2/namespaces/istio-system/quotaspecs/request-count
+  uid: 02bf6d7d-6326-11e9-8154-00505632f6a0
+spec:
+  rules:
+  - quotas:
+    - charge: 1
+      quota: requestcountquota
+```
+
+The `QuotaSpec` translates to 1 for `requestcountquota`.
+
+Confirm the `QuotaSpecBinding` was created:
+
+```yaml
+[root@osc01 (istio-system)policies]# kubectl -n istio-system get QuotaSpecBinding request-count -o yaml
+apiVersion: config.istio.io/v1alpha2
+kind: QuotaSpecBinding
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"config.istio.io/v1alpha2","kind":"QuotaSpecBinding","metadata":{"annotations":{},"name":"request-count","namespace":"istio-system"},"spec":{"quotaSpecs":[{"name":"request-count","namespace":"istio-system"}],"services":[{"name":"productpage","namespace":"default"}]}}
+  creationTimestamp: 2019-04-20T04:37:31Z
+  generation: 1
+  name: request-count
+  namespace: istio-system
+  resourceVersion: "177419"
+  selfLink: /apis/config.istio.io/v1alpha2/namespaces/istio-system/quotaspecbindings/request-count
+  uid: 02c12497-6326-11e9-8154-00505632f6a0
+spec:
+  quotaSpecs:
+  - name: request-count
+    namespace: istio-system
+  services:
+  - name: productpage
+    namespace: default
+```
+
+`QuotaSpecBinding` binds the `QuotaSpec` that was created to the services, in this case the `productpage` where its bound to the `request-count`. 
+
+## Conditional Rate Limits
+
+In the example above, rate limits are set for `productpage` at 2 requests per second / client IP. 
+
+Now, we will explore exempt clients from rate limit if a user is logged in. 
+
+Refresh the productpage, logged in as `jason` and the productpage is repeatedly refreshed, nothing should change because rate limit is not applied.
+
+!DIDN'T WORK
+After you log out, verify the rate limit does apply and you should see `RESOURCE_EXHAUSTED:Quota is exhausted for: requestcount`
+
+## Understanding Rate Limits
+
+Every named quota instance like `requestcount` represents a set of counters. The set is defined by a Cartesian product of all quota dimensions. If the number of requests in the last `expiration` duration exceed `maxAmount`, Mixer returns a `RESOURCE_EXHAUSTED` message to the Envoy proxy, and Envoy returns status `HTTP 429` to the caller.
 
 ## Show steps of upgrading BookInfo from one version to another
 
