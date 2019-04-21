@@ -34,7 +34,7 @@ Find out latest version of Istio
 ISTIO_VERSION=$(curl -L -s https://api.github.com/repos/istio/istio/releases/latest | grep tag_name | sed "s/ *\"tag_name\": *\"\\(.*\\)\",*/\\1/")
 
 # echo $ISTIO_VERSION
-1.1.2
+1.1.3
 ```
 
 Find out previous releases if you do not want to use the latest release
@@ -53,17 +53,17 @@ We will work on using istio by manually downloading it.
 
 Go to https://istio.io
 
-As writing of this, version 1.1.2 is the latest version.
+As writing of this, version 1.1.3 is the latest version.
 
 Download using `curl` command.
 
 ```
-curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.1.2 sh -
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.1.3 sh -
 
-Downloaded into istio-1.1.2:
+Downloaded into istio-1.1.3:
 bin  install  istio.VERSION  LICENSE  README.md  samples  tools
-Add /root/bin/servicemesh/istio-1.1.2/bin to your path; e.g copy paste in your shell and/or ~/.profile:
-export PATH="$PATH:/root/bin/servicemesh/istio-1.1.2/bin"
+Add /root/bin/servicemesh/istio-1.1.3/bin to your path; e.g copy paste in your shell and/or ~/.profile:
+export PATH="$PATH:/root/bin/servicemesh/istio-1.1.3/bin"
 ```
 
 Add istio to your path. Edit `.bashrc` and add PATH. Hint: export PATH is shown above.
@@ -71,7 +71,7 @@ Add istio to your path. Edit `.bashrc` and add PATH. Hint: export PATH is shown 
 Your path may be different depending upon the folder in which you downloaded the Istio
 
 ```
-ISTIO_VERSION=1.1.2
+ISTIO_VERSION=1.1.3
 if [ -d ~/istio-${ISTIO_VERSION}/bin ] ; then
   export PATH="$PATH:~/istio-${ISTIO_VERSION}/bin"
 fi
@@ -88,7 +88,7 @@ Check `istioctl version`
 ```
 # istioctl version
 
-version.BuildInfo{Version:"1.1.2", GitRevision:"2b1331886076df103179e3da5dc9077fed59c989", User:"root", Host:"35adf5bb-5570-11e9-b00d-0a580a2c0205", GolangVersion:"go1.10.4", DockerHub:"docker.io/istio", BuildStatus:"Clean", GitTag:"1.1.1"}
+version.BuildInfo{Version:"1.1.3", GitRevision:"2b1331886076df103179e3da5dc9077fed59c989", User:"root", Host:"35adf5bb-5570-11e9-b00d-0a580a2c0205", GolangVersion:"go1.10.4", DockerHub:"docker.io/istio", BuildStatus:"Clean", GitTag:"1.1.1"}
 ```
 
 #### Install Istio without using mTLS
@@ -134,14 +134,14 @@ Check pod status
 NAME                                      READY   STATUS      RESTARTS   AGE
 grafana-5c45779547-9jxsb                  1/1     Running     0          3m15s
 istio-citadel-5bbc997554-8nn4t            1/1     Running     0          3m8s
-istio-cleanup-secrets-1.1.2-wc8tw         0/1     Completed   0          3m19s
+istio-cleanup-secrets-1.1.3-wc8tw         0/1     Completed   0          3m19s
 istio-egressgateway-79df47bcfb-gwzgl      1/1     Running     0          3m17s
 istio-galley-5ff6d64c5f-ddpwd             1/1     Running     0          3m18s
-istio-grafana-post-install-1.1.2-qxbrl    0/1     Completed   0          3m19s
+istio-grafana-post-install-1.1.3-qxbrl    0/1     Completed   0          3m19s
 istio-ingressgateway-5c6bcff97c-wtg9x     1/1     Running     0          3m16s
 istio-pilot-69d7cc7c97-84zcd              2/2     Running     0          3m10s
 istio-policy-574f8cf96b-x5tml             2/2     Running     5          3m13s
-istio-security-post-install-1.1.2-cmtm2   0/1     Completed   0          3m19s
+istio-security-post-install-1.1.3-cmtm2   0/1     Completed   0          3m19s
 istio-sidecar-injector-549585c8d9-rj9r6   1/1     Running     0          3m7s
 istio-telemetry-6c9df8f48b-k4ltv          2/2     Running     5          3m11s
 istio-tracing-5fbc94c494-jpdgz            1/1     Running     0          3m7s
@@ -1170,7 +1170,7 @@ destinationrule.networking.istio.io/httpbin configured
 
 Send some traffic from `HTTPbin` version 1 to sleep pod
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
 [root@osc01 (istio-lab)istio-scripts]# kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python -m json.tool
 {
@@ -1192,7 +1192,7 @@ Note: Run two bash terminals for both `HTTPbin` versions to see the logs when th
 
 Within `HTTPbin` version 1, the following output shows the following:
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# k log -f httpbin-v1-6569dfb499-r7xhh -c httpbin
 log is DEPRECATED and will be removed in a future version. Use logs instead.
 [2019-04-18 01:49:29 +0000] [1] [INFO] Starting gunicorn 19.9.0
@@ -1204,7 +1204,7 @@ log is DEPRECATED and will be removed in a future version. Use logs instead.
 
 Within v2, since no traffic is being passed here, the logs don't show anything.
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# k log -f httpbin-v2-67c5fc7ffb-9qr7k -c httpbin
 log is DEPRECATED and will be removed in a future version. Use logs instead.
 [2019-04-18 01:49:29 +0000] [1] [INFO] Starting gunicorn 19.9.0
@@ -1215,14 +1215,14 @@ log is DEPRECATED and will be removed in a future version. Use logs instead.
 
 For the next exercise, we will mirror 100% of traffic that is going to `HTTPbin` version 1 for version 2. 
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 22-route-httpbin-alltraffic-v2.yaml -n istio-lab
 virtualservice.networking.istio.io/httpbin configured
 ```
 
 Send the traffic to `HTTPbin` version 1.
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python -m json.tool
 {
     "headers": {
@@ -1242,7 +1242,7 @@ After sending the traffic above, both version of `HTTPbin` will see traffic logs
 
 Note: Run two bash terminals for both `HTTPbin` versions to see the logs when the curl command from above is executed.
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# k log -f httpbin-v2-67c5fc7ffb-9qr7k -c httpbin
 log is DEPRECATED and will be removed in a future version. Use logs instead.
 [2019-04-18 01:49:29 +0000] [1] [INFO] Starting gunicorn 19.9.0
@@ -1252,7 +1252,7 @@ log is DEPRECATED and will be removed in a future version. Use logs instead.
 127.0.0.1 - - [18/Apr/2019:04:41:54 +0000] "GET /headers HTTP/1.1" 200 343 "-" "curl/7.35.0"
 ```
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# k log -f httpbin-v1-6569dfb499-r7xhh -c httpbin
 log is DEPRECATED and will be removed in a future version. Use logs instead.
 [2019-04-18 01:49:29 +0000] [1] [INFO] Starting gunicorn 19.9.0
@@ -1270,8 +1270,8 @@ $SLEEP_POD is the sleep service pod name
 10.1.230.202 is the IP address of `HTTPbin` version 1 pod
 10.1.230.247 is the IP address of `HTTPbin` version 2 pod
 
-```bash
-[root@osc01 (istio-lab)istio-scripts]# kubectl exec -it $SLEEP_POD -c istio-proxy -- sudo tcpdump -A -s 0 host 10.1.230.202 or host 10.1.230.247
+```console
+# kubectl exec -it $SLEEP_POD -c istio-proxy -- sudo tcpdump -A -s 0 host 10.1.230.202 or host 10.1.230.247
 tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
 listening on eth0, link-type EN10MB (Ethernet), capture size 262144 bytes
 04:52:11.317838 IP sleep-7549f66447-rmcl8.51292 > 10-1-230-247.httpbin.istio-lab.svc.cluster.local.80: Flags [P.], seq 3682856920:3682857728, ack 2162198975, win 245, options [nop,nop,TS val 10822498 ecr 10205363], length 808: HTTP: GET /headers HTTP/1.1
@@ -1339,8 +1339,8 @@ Note: Make sure you are `cd` into the `istio` directory.
 
 Identify the ingress gateway details, and take a note of the external IP address:
 
-```bash
-[root@osc01 (istio-system)istio-1.1.2]# kgsvc istio-ingressgateway
+```console
+# kgsvc istio-ingressgateway
 NAME                   TYPE           CLUSTER-IP   EXTERNAL-IP       PORT(S)                                                                                                                                      AGE
 istio-ingressgateway   LoadBalancer   10.0.0.156   192.168.142.250   80:31380/TCP,443:31390/TCP,31400:31400/TCP,15029:31391/TCP,15030:31040/TCP,15031:31396/TCP,15032:30231/TCP,15443:32612/TCP,15020:31795/TCP   3d
 ```
@@ -1350,20 +1350,20 @@ The external-ip will be the ingress gateway and since it exist, this confirms an
 Capture the external-ip host, port and secure ingress port.
 
 Identify the Ingress host, which is `192.168.142.150`:
-```bash
-[root@osc01 (istio-system)istio-1.1.2]# kgsvc istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+```console
+# kgsvc istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 192.168.142.250
 ```
 
 Identify the Ingress port, which is `80`"
-```bash
-[root@osc01 (istio-system)istio-1.1.2]# kgsvc istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].port}'
+```console
+# kgsvc istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].port}'
 80
 ```
 
 Identify the Secure Ingress Port, which is `443`:
-```bash
-[root@osc01 (istio-system)istio-1.1.2]# kgsvc istio-ingressgateway -o jsonpath=.spec.ports[?(@.name=="https")].port}'
+```console
+# kgsvc istio-ingressgateway -o jsonpath=.spec.ports[?(@.name=="https")].port}'
 443
 ```
 If DNS is enabled or if a hostname is defined, the external-ip value might be a host name, instead of an IP address. 
@@ -1371,14 +1371,14 @@ If DNS is enabled or if a hostname is defined, the external-ip value might be a 
 If an external load balancer is not enabled, leverage the service nodeport to identify the ingress port and secure port.
 
 For ingress port without an external load balancer, which is `31380`:
-```bash
-[root@osc01 (istio-system)istio-1.1.2]# kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}'
+```console
+# kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}'
 31380
 ```
 
 For secure ingress port with an external load balancer, which is `31390`:
-```bash
-[root@osc01 (istio-system)istio-1.1.2]# kubectl -n istio-system get service -ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}'
+```console
+# kubectl -n istio-system get service -ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}'
 31390
 ```
 
@@ -1390,22 +1390,22 @@ To enable such routing configurations for ingress traffic, istio routing rules w
 
 First, create an Istio gateway on port 80 for HTTP traffic:
 
-```bash
-[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 23-create-gateway-httpbin80.yaml -n istio-lab
+```console
+# kubectl apply -f 23-create-gateway-httpbin80.yaml -n istio-lab
 gateway.networking.istio.io/httpbin-gateway created
 ```
 
 Configure and enable routes for traffic entering the gateway for `Httpbin` on Port 8000, for two route rules under paths `/status` and `/delay`.
 
-```bash
-[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 24-apply-routes-httpbin80.yaml -n istio-lab
+```console
+# kubectl apply -f 24-apply-routes-httpbin80.yaml -n istio-lab
 virtualservice.networking.istio.io/httpbin configured
 ```
 
 Access the `HTTPbin` service using curl, confirm and correct ingress host and ingress port:
 
-```bash
-31390[root@osc01 (istio-system)istio-1.1.2]# curl -I -HHost:httpbin.example.com h/192.168.142.250:80/status/200
+```console
+# curl -I -HHost:httpbin.example.com h/192.168.142.250:80/status/200
 HTTP/1.1 200 OK
 server: istio-envoy
 date: Thu, 18 Apr 2019 05:37:15 GMT
@@ -1420,8 +1420,8 @@ Note the `access-control-allow-origin` value is `*`. What this means is that the
 
 Try and test out the same curl command above, but with a different host name. The output should be a `HTTP 404 error`. This is becuase the current ingress external-ip and/or hostname is the only istio configured gateway that can accept incoming traffic.
 
-```bash
-[root@osc01 (istio-system)istio-1.1.2]# curl -I -HHost:httpbin.example1.com http://192.168.142.250:80/status/200
+```console
+# curl -I -HHost:httpbin.example1.com http://192.168.142.250:80/status/200
 
 HTTP/1.1 404 Not Found
 date: Thu, 18 Apr 2019 05:47:04 GMT
@@ -1435,8 +1435,8 @@ To resolve `HTTPbin`'s current host name of `httpbin.example.com`, configure the
 
 Apply the new ingress gateway and virtual service YMAL to allow incoming traffic through `HTTPbin` via any open `*` host:
 
-```bash
-[root@osc01 (istio-system)istio-scripts]# kubectl apply -f 25-apply-httpbin-vs-dr-anyhost.yaml -n istio-lab
+```console
+# kubectl apply -f 25-apply-httpbin-vs-dr-anyhost.yaml -n istio-lab
 gateway.networking.istio.io/httpbin-gateway configured
 virtualservice.networking.istio.io/httpbin configured
 ```
@@ -1487,14 +1487,14 @@ Allow outbound traffic for `global.outboundTrafficPolicy.mode` that allows/restr
 
 We'll start with validating the existing value of istio config map and it's outbound traffic policy mode:
 
-```bash
+```console
 [root@osc01 (istio-system)~]# kubectl get configmap istio -n istio-system -o yaml | grep -o "mode: ALLOW_ANY"
 mode: ALLOW_ANY
 ```
 
 Since it allows all calls, run the sleep pod to confirm outgoing calls to hosts such as google, cnn etc.:
 
-```bash
+```console
 [root@osc01 (istio-lab)~]# kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl -I https://www.google.com | grep  "HTTP/"; kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl -I https://edition.cnn.com | grep "HTTP/"
 HTTP/1.1 200 OK
 HTTP/1.1 200 OK
@@ -1508,7 +1508,7 @@ The `ServiceEntry` configruations allows access to publicly accessible services 
 
 Enable access to external service by changing `global.outboundTrafficPolicy.mode` from `ALLOW_ANY` to `REGISTRY_ONLY` within istio config map under `istio-system` namespace.
 
-```bash
+```console
 [root@osc01 (istio-system)~]# kubectl get configmap istio -n istio-system -o yaml | sed 's/mode: ALLOW_ANY/mode: REGISTRY_ONLY/g' | kubectl replace -n istio-system -f -
 configmap/istio replaced
 ```
@@ -1518,7 +1518,7 @@ Reason why its blocked is because a `ServiceEntry` for these external services h
 
 Note: it might take a couple of changes for the egress outbound policy changes to take affect. Re-run the command, if the connection is a success.
 
-```bash
+```console
 [root@osc01 (istio-lab)~]# kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl -I https://www.google.com | grep  "HTTP/"; kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl -I https://edition.cnn.com | grep "HTTP/"
 command terminated with exit code 35
 command terminated with exit code 35
@@ -1527,14 +1527,14 @@ command terminated with exit code 35
 
 Create a `ServiceEntry` YAML to allow HTTP access to external `HTTPbin` service.
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 26-create-serviceentry-http-ext.yaml -n istio-lab
 serviceentry.networking.istio.io/httpbin-ext created
 ```
 
 Make a request to the external `HTTPbin` service from sleep pod:
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl http://httpbin.org/headers
 {
   "headers": {
@@ -1562,7 +1562,7 @@ Output -> check logsoutput.txt under path
 
 Check the Mixer log to see if Istio is deployed in `istio-system`.
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl -n istio-system logs -l istio-mixer-type=telemetry -c mixer | grep 'httpbin.org'
 {"level":"info","time":"2019-04-18T21:06:16.043445Z","instance":"accesslog.logentry.istio-system","apiClaims":"","apiKey":"","clientTraceId":"","connection_security_policy":"unknown","destinationApp":"","destinationIp":"AAAAAAAAAAAAAP//AAAAAA==","destinationName":"unknown","destinationNamespace":"default","destinationOwner":"unknown","destinationPrincipal":"","destinationServiceHost":"","destinationWorkload":"unknown","grpcMessage":"","grpcStatus":"","httpAuthority":"httpbin.org","latency":"761.837µs","method":"GET","permissiveResponseCode":"none","permissiveResponsePolicyID":"none","protocol":"http","receivedBytes":143,"referer":"","reporter":"source","requestId":"131c6767-1354-9b24-9859-528b6e84b583","requestSize":0,"requestedServerName":"","responseCode":404,"responseFlags":"NR","responseSize":0,"responseTimestamp":"2019-04-18T21:06:16.043896Z","sentBytes":54,"sourceApp":"sleep","sourceIp":"AAAAAAAAAAAAAP//CgHm5Q==","sourceName":"sleep-7549f66447-rmcl8","sourceNamespace":"istio-lab","sourceOwner":"kubernetes://apis/apps/v1/namespaces/istio-lab/deployments/sleep","sourcePrincipal":"","sourceWorkload":"sleep","url":"/headers","userAgent":"curl/7.35.0","xForwardedFor":"0.0.0.0"}
 {"level":"info","time":"2019-04-18T21:06:30.896517Z","instance":"accesslog.logentry.istio-system","apiClaims":"","apiKey":"","clientTraceId":"","connection_security_policy":"unknown","destinationApp":"","destinationIp":"AAAAAAAAAAAAAP//AAAAAA==","destinationName":"unknown","destinationNamespace":"default","destinationOwner":"unknown","destinationPrincipal":"","destinationServiceHost":"","destinationWorkload":"unknown","grpcMessage":"","grpcStatus":"","httpAuthority":"httpbin.org","latency":"168.903µs","method":"GET","permissiveResponseCode":"none","permissiveResponsePolicyID":"none","protocol":"http","receivedBytes":143,"referer":"","reporter":"source","requestId":"eecb6335-4448-9074-9728-f2616fc7081f","requestSize":0,"requestedServerName":"","responseCode":404,"responseFlags":"NR","responseSize":0,"responseTimestamp":"2019-04-18T21:06:30.896607Z","sentBytes":54,"sourceApp":"sleep","sourceIp":"AAAAAAAAAAAAAP//CgHm5Q==","sourceName":"sleep-7549f66447-rmcl8","sourceNamespace":"istio-lab","sourceOwner":"kubernetes://apis/apps/v1/namespaces/istio-lab/deployments/sleep","sourcePrincipal":"","sourceWorkload":"sleep","url":"/headers","userAgent":"curl/7.35.0","xForwardedFor":"0.0.0.0"}
@@ -1575,14 +1575,14 @@ Within the Mixer log, the `destinationServiceHost` attribute is set to `httpbin.
 
 Create a `ServiceEntry` YAML to allow HTTPS access to external `HTTPbin` service.
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 27-create-serviceentry-https-ext.yaml -n istio-lab
 serviceentry.networking.istio.io/google created
 ```
 
 Initiate a request to the external HTTPS service to google from the sleep pod:
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl exec -it sleep-7549f66447-rmcl8 -c sleep -- curl -I https://www.google.com | grep  "HTTP/"
 HTTP/1.1 200 OK
 ```
@@ -1596,7 +1596,7 @@ Output -> check logsoutput.txt under path
 ```
 Check the mixer log to see if Istio is deployed in `istio-system`.
 
-```bash
+```console
 [root@osc01 (istio-lab)~]# kubectl -n istio-system logs -l istio-mixer-type=telemetry -c mixer | grep 'www.google.com'
 {"level":"info","time":"2019-04-20T02:51:39.539649Z","instance":"tcpaccesslog.logentry.istio-system","connectionDuration":"0s","connectionEvent":"open","connection_security_policy":"unknown","destinationApp":"","destinationIp":"rNmkhA==","destinationName":"unknown","destinationNamespace":"default","destinationOwner":"unknown","destinationPrincipal":"","destinationServiceHost":"www.google.com","destinationWorkload":"unknown","protocol":"tcp","receivedBytes":0,"reporter":"source","requestedServerName":"www.google.com","responseFlags":"","sentBytes":0,"sourceApp":"sleep","sourceIp":"CgHnFg==","sourceName":"sleep-7549f66447-rmcl8","sourceNamespace":"istio-lab","sourceOwner":"kubernetes://apis/apps/v1/namespaces/istio-lab/deployments/sleep","sourcePrincipal":"","sourceWorkload":"sleep","totalReceivedBytes":0,"totalSentBytes":0}
 {"level":"info","time":"2019-04-20T02:51:39.635535Z","instance":"tcpaccesslog.logentry.istio-system","connectionDuration":"131.633351ms","connectionEvent":"close","connection_security_policy":"unknown","destinationApp":"","destinationIp":"rNmkhA==","destinationName":"unknown","destinationNamespace":"default","destinationOwner":"unknown","destinationPrincipal":"","destinationServiceHost":"www.google.com","destinationWorkload":"unknown","protocol":"tcp","receivedBytes":561,"reporter":"source","requestedServerName":"www.google.com","responseFlags":"","sentBytes":3225,"sourceApp":"sleep","sourceIp":"CgHnFg==","sourceName":"sleep-7549f66447-rmcl8","sourceNamespace":"istio-lab","sourceOwner":"kubernetes://apis/apps/v1/namespaces/istio-lab/deployments/sleep","sourcePrincipal":"","sourceWorkload":"sleep","totalReceivedBytes":561,"totalSentBytes":3225}
@@ -1610,7 +1610,7 @@ Set timeout rules on class to the `httpbin.org` service using sleep pod and init
 
 From inside the pod, initiate a curl request to delay endpoint of `httpbin.org` external service
 
-```bash
+```console
 [root@osc01 (istio-lab)~]# kubectl exec -it  sleep-7549f66447-rmcl8 -c sleep sh
 # curl -o /dev/null -s -w "%{http_code}\n" http://httpbin.org/delay/5
 200
@@ -1618,14 +1618,14 @@ From inside the pod, initiate a curl request to delay endpoint of `httpbin.org` 
 
 Within 5 seconds, the output should be 200 (OK). Exit out of the pod and use `kubectl` to apply a 3s timeout on calls to the `httpbin.org` external service.
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 28-apply-3sec-timeout-httpbin.yaml
 virtualservice.networking.istio.io/httpbin-ext created
 ```
 
 After a few seconds, run the same curl request:
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl exec -it  sleep-7549f66447-rmcl8 -c sleep sh
 # curl -o /dev/null -s -w "%{http_code}\n" http://httpbin.org/delay/5
 504
@@ -1647,7 +1647,7 @@ Set the value for `global.proxy.includeIPRanges` in accordance to the cluster pr
 
 For IBM Cloud Private, CD to the cluster folder within ICP.
 
-```bash
+```console
 [root@osc01 (istio-lab)icp3.1.2]# pwd
 /opt/ibm/icp3.1.2
 [root@osc01 (istio-lab)icp3.1.2]# cat cluster/config.yaml | grep service_cluster_ip_range
@@ -1659,8 +1659,8 @@ service_cluster_ip_range: 10.0.0.1/24
 
 Update `istio-sidecar-injector` configmap using the IP ranges specific to your cluster provider. 
 
-```bash
-[root@osc01 (istio-lab)istio-1.1.2]# helm template install/kubernetes/helm/istio --set global.proxy.includeIPRanges="10.0.0.1/24" -x templates/sidecar-injector-configmap.yaml | kubectl apply -f -
+```console
+# helm template install/kubernetes/helm/istio --set global.proxy.includeIPRanges="10.0.0.1/24" -x templates/sidecar-injector-configmap.yaml | kubectl apply -f -
 configmap/istio-sidecar-injector created
 ```
 
@@ -1668,7 +1668,7 @@ configmap/istio-sidecar-injector created
 
 Now that the bypass config will affect new deployments, the sleep pod will need to be redeployed.
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 29-create-sleep-service-account.yaml
 serviceaccount/sleep created
 service/sleep created
@@ -1677,7 +1677,7 @@ deployment.extensions/sleep configured
 
 After `istio-sidecar-injector` configmap and redeployment of the `sleep` pod, Istio's sidecar will intercept and manage internal requests within the cluster. Any external requests will bypass the sidecar and go to its destination. 
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# k exec -it sleep-75b799df5f-csgb6 -c sleep curl http://httpbin.org/headers
 {
   "headers": {
@@ -1724,7 +1724,7 @@ The default Istio install has policy enforcemnt diabled. To install Istio with p
 
 Check the status of policy enforcement for Istio
 
-```bash
+```console
 [root@osc01 (istio-lab)policies]# kubectl -n istio-system get cm istio -o jsonpath="{@.data.mesh}" | grep disablePolicyChecks
 disablePolicyChecks: false
 ```
@@ -1736,11 +1736,11 @@ If it is disabled, edit the `istio` config map and enable policy checks.
 Note: validate you're in the following path to confirm the status of the policy check:
 
 
-```bash
-[root@osc01 (istio-lab)istio-1.1.2]# pwd
-/opt/ibm/icp3.1.2/cluster/istio-1.1.2
+```console
+# pwd
+/opt/ibm/icp3.1.2/cluster/istio-1.1.3
 
-[root@osc01 (istio-lab)istio-1.1.2]# helm template install/kubernetes/helm/istio --namespace=istio-system -x templates/configmap.yaml --set global.disablePolicyChecks=false | kubectl -n istio-system replace -f -
+# helm template install/kubernetes/helm/istio --namespace=istio-system -x templates/configmap.yaml --set global.disablePolicyChecks=false | kubectl -n istio-system replace -f -
 configmap/istio replaced
 ```
 ## Enabling Rate Limits
@@ -1749,7 +1749,7 @@ This shows how to use Istio by dynamically limiting traffic to a service.
 
 Validate the BookInfo app is installed and its virtualservice is deployed. 
 
-```bash
+```console
 [root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 03-create-reviews-virtual-service.yaml
 virtualservice.networking.istio.io/productpage unchanged
 virtualservice.networking.istio.io/reviews unchanged
@@ -1774,9 +1774,9 @@ Mixer side rate limitations:
 
 Run the `memquota` YAML to enable rate limits:
 
-Note: Ensure you're running Istio v1.1.2 and higher.
+Note: Ensure you're running Istio v1.1.3 and higher.
 
-```bash
+```console
 [root@osc01 (istio-system)policies]# kubectl apply -f 01-create-memquota-ratelimit.yaml
 handler.config.istio.io/quotahandler created
 instance.config.istio.io/requestcountquota created
