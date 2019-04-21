@@ -274,7 +274,7 @@ deployment.extensions/productpage-v1 created
 
 ```
 
-Check pods
+Check pods and wait until all show as `Running`.
 
 ```console
 # kubectl -n istio-lab get pods
@@ -308,7 +308,7 @@ Multiple cases:
 
   In above case, it is `10.1.230.246`. This IP address will be different for you.
 
-  Test the service:
+  Test the service using pod's IP address. Change IP address as per your output.
 
   ```console
   curl -s http://10.1.230.246:9080 | grep title
@@ -325,9 +325,9 @@ Multiple cases:
   ratings       ClusterIP   10.0.0.66    <none>        9080/TCP   102s
   reviews       ClusterIP   10.0.0.45    <none>        9080/TCP   102s
   ```
-  The productpage service address is `10.0.0.20`. This IP address will be different for you.
+  The productpage service address is `10.0.0.20`. This IP address might be different for you.
 
-  Test the service
+  Test the service and use IP address as per your service IP address.
 
   ```console
   # curl -s http://10.0.0.20:9080 | grep title
@@ -412,7 +412,7 @@ Multiple cases:
   192.168.142.101   Ready    etcd,management,master,proxy,worker   29d   v1.12.4+icp
   ```
 
-  The IP address of the node is `192.168.142.101` and the node port is `30306`.
+  The IP address of the node is `192.168.142.101` and the node port is `30306`. Your NodePort might be different.
 
   If you open the browser to http://192.168.142.101:30306 from outside the VM, you should be able to access the service.
 
@@ -429,7 +429,7 @@ Multiple cases:
   istio-ingressgateway     LoadBalancer   10.0.0.223   192.168.142.250   80:31380/TCP,443:31390/TCP,31400:31400/TCP,15029:32030/TCP,15030:30237/TCP,15031:30824/TCP,15032:30965/TCP,15443:31507/TCP,15020:31796/TCP   172m
   ```
 
-  Notice that the external IP address assigned to `istio-ingressgateway` is `192.168.142.250`. We can access the service web page by using `http://192.168.142.250`.
+  Notice that the external IP address assigned to `istio-ingressgateway` is `192.168.142.250`. We can access the service web page by using `http://192.168.142.250`. This IP address could be different for you.
 
   Try accessing the web page and you will notice that the page did not work.
 
@@ -439,7 +439,7 @@ Multiple cases:
 
   ### Istio Gateway and Virtual Service Definition
 
-  Run YAML 01-create-gateway-virtual-service has definition for a gateway and virtual service.
+  Run YAML `01-create-gateway-virtual-service` has definition for a gateway and virtual service.
 
   ```yaml
   apiVersion: networking.istio.io/v1alpha3
@@ -483,7 +483,6 @@ Multiple cases:
           host: productpage
           port:
             number: 9080
-  EOF
   ```
 
   ### Create Gateway and Virtual Service
@@ -595,7 +594,7 @@ What is a virtual service and what different things can be accomplished?
 
 Run script `kubectl -n istio-lab apply -f 03-create-reviews-virtual-service.yaml`
 
-Contents of 03-create-reviews-virtual-service.yaml
+Contents of `03-create-reviews-virtual-service.yaml`
 
 ```yaml
 apiVersion: networking.istio.io/v1alpha3
@@ -1670,7 +1669,7 @@ configmap/istio-sidecar-injector created
 Now that the bypass config will affect new deployments, the sleep pod will need to be redeployed.
 
 ```console
-[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 29-create-sleep-service-account.yaml
+# kubectl apply -f 29-create-sleep-service-account.yaml
 serviceaccount/sleep created
 service/sleep created
 deployment.extensions/sleep configured
@@ -1751,7 +1750,7 @@ This shows how to use Istio by dynamically limiting traffic to a service.
 Validate the BookInfo app is installed and its virtualservice is deployed. 
 
 ```console
-[root@osc01 (istio-lab)istio-scripts]# kubectl apply -f 03-create-reviews-virtual-service.yaml
+# kubectl apply -f 03-create-reviews-virtual-service.yaml
 virtualservice.networking.istio.io/productpage unchanged
 virtualservice.networking.istio.io/reviews unchanged
 virtualservice.networking.istio.io/ratings unchanged
@@ -1806,7 +1805,7 @@ When a request is processed, first matching override is picked.
 Validate the `quota instance` was created:
 
 ```YAML
-[root@osc01 (istio-system)policies]# kubectl -n istio-system get instance requestcountquota -o yaml
+# kubectl -n istio-system get instance requestcountquota -o yaml
 apiVersion: config.istio.io/v1alpha2
 kind: instance
 metadata:
@@ -1834,7 +1833,7 @@ The quota template has 3 dimensions used by `memquota` (as shown above) or in `r
 Confirm the `quota rule` was created:
 
 ```yaml
-[root@osc01 (istio-system)policies]# kubectl -n istio-system get rule quota -o yaml
+# kubectl -n istio-system get rule quota -o yaml
 apiVersion: config.istio.io/v1alpha2
 kind: rule
 metadata:
@@ -1860,7 +1859,7 @@ A rule tells Mixer to invoke either `memquota` or `redisquota` handler and pass 
 Confirm the `QuotaSpec` was created:
 
 ```yaml
-[root@osc01 (istio-system)policies]# kubectl -n istio-system get QuotaSpec request-count -o yaml
+# kubectl -n istio-system get QuotaSpec request-count -o yaml
 apiVersion: config.istio.io/v1alpha2
 kind: QuotaSpec
 metadata:
@@ -1886,7 +1885,7 @@ The `QuotaSpec` translates to 1 for `requestcountquota`.
 Confirm the `QuotaSpecBinding` was created:
 
 ```yaml
-[root@osc01 (istio-system)policies]# kubectl -n istio-system get QuotaSpecBinding request-count -o yaml
+# kubectl -n istio-system get QuotaSpecBinding request-count -o yaml
 apiVersion: config.istio.io/v1alpha2
 kind: QuotaSpecBinding
 metadata:
