@@ -163,6 +163,7 @@ Use `keepalived` Helm chart from : [https://github.com/servicemeshistio/keepaliv
 Download Helm Chart
 
 ```console
+cd
 git clone https://github.com/servicemeshistio/keepalived.git
 ```
 
@@ -205,7 +206,7 @@ echo keepalivedCloudProvider.serviceIPRange="192.168.142.248/29"
 cd keepalived
 
 helm install . --name keepalived --namespace istio-system \
- --set keepalivedCloudProvider.serviceIPRange="192.168.142.201/32" --tls
+ --set keepalivedCloudProvider.serviceIPRange="192.168.142.248/29" --tls
 
 ```
 
