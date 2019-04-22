@@ -1714,9 +1714,9 @@ This bypasses sidecar and gives access to the external services directly. To do 
 
 Note: Implementing egress traffic controle more securly, direct egress traffic through an egress gateway and review security concerns.
 
-# POlicies
+# Policies
 
-## Enabling Policies
+## Enabling Policy Enforcement
 
 This shows how to enable istio policy enforcement
 
@@ -1910,7 +1910,7 @@ spec:
 
 `QuotaSpecBinding` binds the `QuotaSpec` that was created to the services, in this case the `productpage` where its bound to the `request-count`. 
 
-## Conditional Rate Limits
+### Conditional Rate Limits
 
 In the example above, rate limits are set for `productpage` at 2 requests per second / client IP. 
 
@@ -1921,11 +1921,271 @@ Refresh the productpage, logged in as `jason` and the productpage is repeatedly 
 !DIDN'T WORK
 After you log out, verify the rate limit does apply and you should see `RESOURCE_EXHAUSTED:Quota is exhausted for: requestcount`
 
-## Understanding Rate Limits
+### Understanding Rate Limits
 
-Every named quota instance like `requestcount` represents a set of counters. The set is defined by a Cartesian product of all quota dimensions. If the number of requests in the last `expiration` duration exceed `maxAmount`, Mixer returns a `RESOURCE_EXHAUSTED` message to the Envoy proxy, and Envoy returns status `HTTP 429` to the caller.
+Mixer applies rate limits to requests that match certain conditions. Every quota represents set of counters. The set is defined by quota dementions. If the # of requests in `expiration` exceed `maxAmount` Mixer will return a `RESOURCE_EXHAUSTED` message to sidecar. Sidecar returns a `HTTP 429` to the caller.
 
-## Show steps of upgrading BookInfo from one version to another
+`memquota` / `redisquota` adapter enforces rate limits. 
+`maxAmount` are configuration sets for default limits for all counters associated with a quota.
+
+The default limit is applied, if the quota override doesn't match the request. The rate limit adapters (`memquota`/`redisquota`) selects first override that matches a request. Override does not specify all quota dimensions. 
+
+Such rate limit policies can be enforced for any namespace instead of the entire istio framework. 
+
+## Control Headers and Routing
+
+Before getting started with headers and routing traffic, validate ingress is configured using a gateway.
+
+First, customize the `httpbin` virtual service to enable two route rules for `/headers` and `/status`
+
+```bash
+[root@osc01 (istio-lab)policies]# pwd
+/opt/ibm/icp3.1.2/cluster/istio-scripts/policies
+[root@osc01 (istio-lab)policies]# kubectl apply -f 02-create-httpbin-gw-routerules.yaml
+virtualservice.networking.istio.io/httpbin configured
+```
+
+### Output-producing adapaters
+
+Using a policy adapter called `keyval`, that will return an output with a single field called `value`. Adapter is configured with a lookup table, which it uses to populate the output value. If there isn't an output, `NOT_FOUND` error status is shown if there isn't an instance key within the lookup table. 
+
+
+First, deploy the `keyval` adapter. 
+
+NOTE: Make sure the Image policies on ICP are updated to allow `gcr.io` install of `keyval`. This can be done through the ICP home page by clicking on hamburger icon and navigate to: Manage -> Resource Security -> Image Policies and create a new image policy.
+
+```bash
+[root@osc01 (istio-system)policies]# kubectl run keyval --image=gcr.io/istio-testing/keyval:release-1.1 --namespace istio-system --port 9070 --expose
+kubectl run --generator=deployment/apps.v1beta1 is DEPRECATED and will be removed in a future version. Use kubectl create instead.
+service/keyval created
+deployment.apps/keyval created
+```
+
+Validate the keyval pod was created:
+```bash
+[root@osc01 (istio-system)policies]# kgp | grep keyval
+keyval-7489bf9678-tm9qz                                 1/1     Running     0          77s
+```
+
+Create the keyval adapter by deploying its template and configuration descriptors:
+
+```bash
+[root@osc01 (istio-system)policies]# kubectl apply -f 03-create-keyval-template.yaml
+template.config.istio.io/keyval created
+[root@osc01 (istio-system)policies]# kubectl apply -f 04-create-keyval-adapter.yaml
+adapter.config.istio.io/keyval created
+```
+
+Create a handler for the `keyval` demo adapter with a fixed lookup table
+
+```bash
+[root@osc01 (istio-system)policies]# kubectl apply -f 05-create-keyval-lookup-table.yaml
+handler.config.istio.io/keyval created
+```
+
+Create an instance for the `keyval` handler with a `user` request header as a lookup key
+
+```bash
+[root@osc01 (istio-system)policies]# kubectl apply -f 06-create-keyval-instance.yaml
+instance.config.istio.io/keyval created
+```
+
+### Request header operations
+
+Confirm the external ingress host name & port name and validate the `httpbin` service is accessible through the ingress gateway. 
+
+```bash
+[root@osc01 (istio-system)policies]# kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+192.168.142.250
+[root@osc01 (istio-system)policies]# kubectl -n istio-system get service istio-ingressgateway spec.ports[?(@.name=="http2")].port}'
+80
+[root@osc01 (istio-system)policies]# curl http://192.168.142.250:80/headers
+{
+  "headers": {
+    "Accept": "*/*",
+    "Content-Length": "0",
+    "Host": "192.168.142.250",
+    "User-Agent": "curl/7.29.0",
+    "X-B3-Parentspanid": "8cff45448d3acdf8",
+    "X-B3-Sampled": "1",
+    "X-B3-Spanid": "1a8d07e1f78316b0",
+    "X-B3-Traceid": "0851827ad17cf6bf8cff45448d3acdf8",
+    "X-Envoy-Internal": "true"
+  }
+}
+```
+
+The output should be request headers as they are being received by `httpbin` service. 
+
+Create a rule for the `keyval` demo adapter.
+
+```bash
+[root@osc01 (istio-system)policies]# kubectl apply -f 07-create-keyval-rule.yaml
+rule.config.istio.io/keyval created
+```
+
+Next, issue a request to the ingress gateway with the header as `jason` as a key value. 
+
+```bash
+[root@osc01 (istio-system)policies]# curl -Huser:jason http://192.168.142.250:80/headers                     {
+  "headers": {
+    "Accept": "*/*",
+    "Content-Length": "0",
+    "Host": "192.168.142.250",
+    "User": "jason",
+    "User-Agent": "curl/7.29.0",
+    "User-Group": "admin",
+    "X-B3-Parentspanid": "072070077118f836",
+    "X-B3-Sampled": "1",
+    "X-B3-Spanid": "b930792eba15d803",
+    "X-B3-Traceid": "3aaad922482642bf072070077118f836",
+    "X-Envoy-Internal": "true"
+  }
+}
+```
+
+The `user-group` header is derived from the `keyval` rule application of the adapter. Within the rule, the expression `x.output.value` is returned from the `key-val` adapter. 
+
+Update the `keyval` rule with URI path to a different virtual service route. 
+
+```bash
+[root@osc01 (istio-system)policies]# kubectl apply -f 08-update-keyval-rule-newURI.yaml
+rule.config.istio.io/keyval configured
+```
+
+Re-run the request to ingress gateway for user `jason`.
+
+```bash
+[root@osc01 (istio-system)policies]# curl -Huser:jason -I http://192.168.142.250:80/headers
+HTTP/1.1 418 Unknown
+server: istio-envoy
+date: Mon, 22 Apr 2019 03:34:36 GMT
+x-more-info: http://tools.ietf.org/html/rfc2324
+access-control-allow-origin: *
+access-control-allow-credentials: true
+content-length: 135
+x-envoy-upstream-service-time: 7
+```
+
+Note that the ingress gateway changed the route AFTER the rule is applied to the `keyval` adapter. 
+
+Note: Modified requests based on microservice rules are not checked against the policy engine within the same proxy. A best practice is to use this feature in gateways so server-side policy checks aren't impacted.
+
+### Denials and White/Black Listing
+
+Control access to a service using denials, and attribute based white/black listing based on IP address.
+
+Before getting started, validate the `BookInfo` app is deployed and initialize the `reviews` microservice for user `jason` to version-2 and all requests from any user to version-3. 
+
+```bash
+[root@osc01 (istio-lab)policies]# kubectl apply -f 09-update-bookinfo-vs-foruser.yaml
+virtualservice.networking.istio.io/reviews configured
+```
+
+### Simple Denials
+
+Access to a microservice can be based on any attributes that are available within Mixer. This access control is based on denying requests using Mixer selectors.
+
+Login to the Bookinfo App as user `jason`, you will only see reviews-v2 (Black stars) no matter how many times you refresh the page. The ratings service is being called by reviews-v2 service.
+
+If you change to another user, or logout, the reviews will only be called to reviews-v3 (Red stars) no matter how many times you refresh the page. The ratings service is being by reviews-v3 service.
+
+Next, deny access to revies-v3 service by creating a rule, instance and handler.
+
+```bash
+[root@osc01 (istio-lab)policies]# kubectl apply -f 10-update-bookinfo-reviews-denyv3handler.yaml
+handler.config.istio.io/denyreviewsv3handler created
+instance.config.istio.io/denyreviewsv3request created
+rule.config.istio.io/denyreviewsv3 created
+```
+
+Note: If using Istio v1.1.2 or before, apply the denyv3handler CRDs for reviews to be updated and take affect.
+
+```bash
+[root@osc01 (istio-lab)policies]# kubectl apply -f 11-create-bookinfo-reviews-denyv3handler-crd.yaml
+denier.config.istio.io/denyreviewsv3handler created
+checknothing.config.istio.io/denyreviewsv3request created
+rule.config.istio.io/denyreviewsv3 configured
+```
+
+The deny rule states that any request matches will be denied if they come from `reviews` version 3 to the `ratings` service. It uses a `denier` adapater to deny requests coming from reviews-v3 or whatever service is identified. The deny adapater will show a pre-configured status code and message specified within the adapater configuration.
+
+Refresh the product page, while logged out, reviews-v3 (red stars) will be blocked and the message: "Ratings service is currently unavailable" will show up. 
+
+When logged in as `jason` or as any other user, you will only see reviews-v2 (black stars)
+
+The above details confirm that the ratings service will only be available if logged in a user `jason`. 
+
+### Attribute based whitelists or blacklists
+
+Enable whitelist configuration, which is equivalent to `denier` configuration. This rule will reject requets from reviews-v3.
+
+Remove the denier configuration & CRD from the reviews-v3 deny rule:
+
+```bash
+[root@osc01 (istio-lab)policies]# kubectl delete -f 10-update-bookinfo-reviews-denyv3handler.yaml
+handler.config.istio.io "denyreviewsv3handler" deleted
+instance.config.istio.io "denyreviewsv3request" deleted
+rule.config.istio.io "denyreviewsv3" deleted
+[root@osc01 (istio-lab)policies]# kubectl delete -f 11-create-bookinfo-reviews-denyv3handler-crd.yaml
+denier.config.istio.io "denyreviewsv3handler" deleted
+checknothing.config.istio.io "denyreviewsv3request" deleted
+```
+
+After both the YAMLs are delete, refresh the `productpage` without being logged in as a user. The productpage should show version-v3 (red stars). 
+
+Apply configuration for `list` adapter that white-lists versions v1 and v2: 
+
+```bash
+[root@osc01 (istio-lab)policies]# kubectl apply -f 12-update-bookinfo-whitelist-v1v2.yaml
+handler.config.istio.io/whitelist created
+instance.config.istio.io/appversion created
+rule.config.istio.io/checkversion created
+```
+
+Note: If using Istio v1.1.2 or before, apply the whitelist v1 & v2 CRDs for reviews to be updated and take affect.
+
+```bash
+[root@osc01 (istio-lab)policies]# kubectl apply -f 13-create-bookinfo-whitelist-v1v2-crd.yaml
+listchecker.config.istio.io/whitelist created
+listentry.config.istio.io/appversion created
+rule.config.istio.io/checkversion configured
+```
+
+If you navigate to `productpage`, while logged in as `jason`, you will see reviews-v2 (black stars). While logged out, you will see reviews overall is not available. 
+
+### IP based whitelists or blacklists
+
+Istio supports whitelists and blacklists based IP address. It can be configured to accept or reject form a specific IP address or a subnect.
+
+Verify access to `productpage` is available because after the below rules are applied, product page will not be available because request will be defined for a subnet of IP addresses.
+
+Apply the configuration for `list` adapter that whitelists subnet "10.57.0.0\16" at the ingress gateway:
+
+```bash
+[root@osc01 (istio-lab)policies]# kubectl apply -f 14-create-bookinfo-deny-ip-crd.yaml
+handler.config.istio.io/whitelistip created
+instance.config.istio.io/sourceip created
+rule.config.istio.io/checkip created
+```
+
+Note: If using Istio v1.1.2 or before, apply the deny subnet to `productpage` CRDs for updates to take affect.
+
+```bash
+[root@osc01 (istio-lab)policies]# kubectl apply -f 15-create-bookinfo-deny-subset-crd.yaml
+listchecker.config.istio.io/whitelistip created
+listentry.config.istio.io/sourceip created
+rule.config.istio.io/checkip configured
+```
+
+!DIDN'T WORK
+If the product page is refreshed, a whitelist error will come up to notify that the IP address is whitelisted.
+
+
+
+
+
+
 
 ## Traffic Management
 
