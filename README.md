@@ -2071,7 +2071,7 @@ Note that the ingress gateway changed the route AFTER the rule is applied to the
 
 Note: Modified requests based on microservice rules are not checked against the policy engine within the same proxy. A best practice is to use this feature in gateways so server-side policy checks aren't impacted.
 
-### Denials and White/Black Listing
+## Denials and White/Black Listing
 
 Control access to a service using denials, and attribute based white/black listing based on IP address.
 
